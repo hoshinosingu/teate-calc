@@ -6,7 +6,8 @@
   <title>手当計算</title>
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 16px; line-height: 1.4; }
-    h1 { font-size: 18px; margin: 0 0 12px; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    .sub { color:#555; font-size: 13px; margin: 0 0 12px; }
     .grid { display: grid; gap: 12px; grid-template-columns: 1fr; max-width: 1200px; }
     .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
     label { display:block; font-size: 12px; color:#444; margin-top: 6px; }
@@ -29,6 +30,7 @@
     @media (max-width: 768px) {
       body { margin: 10px; }
       h1 { font-size: 16px; text-align: center; }
+      .sub { text-align:center; }
       input, select { font-size: 16px; }
 
       table { display: block; }
@@ -71,9 +73,26 @@
   </style>
 </head>
 <body>
-  <h1>手当計算</h1>
+  <h1 id="pageTitle">手当計算</h1>
+  <div class="sub" id="pageSubtitle"></div>
 
   <div class="grid">
+
+    <div class="card">
+      <div class="three">
+        <div>
+          <label>何月分（締め：先月15日〜今月15日）</label>
+          <input id="targetMonth" type="month" />
+        </div>
+        <div>
+          <label>対象期間（自動）</label>
+          <input id="periodText" class="mono" readonly />
+        </div>
+        <div class="row-controls" style="justify-content:flex-end; align-self:end;">
+          <button id="applyMonth">この月に更新</button>
+        </div>
+      </div>
+    </div>
 
     <div class="card">
       <div class="three">
@@ -88,18 +107,19 @@
         <div>
           <label>端数（15分単位）切り上げ許容（分）</label>
           <input id="roundingGrace" type="number" min="0" max="14" step="1" value="0" />
-          <div class="muted">0=切り捨てのみ / 1=14分だけ切り上げ / 2=13〜14分切り上げ</div>
         </div>
       </div>
 
       <div class="two" style="margin-top:10px;">
         <div>
           <label>モーニング時間帯（開始）</label>
-          <input id="morningStart" class="mono" value="6:00" />
+          <input id="morningStart" class="mono" value="600" />
+          <div class="muted">例：600 / 6:00 / 0600</div>
         </div>
         <div>
           <label>モーニング時間帯（終了）</label>
-          <input id="morningEnd" class="mono" value="9:00" />
+          <input id="morningEnd" class="mono" value="900" />
+          <div class="muted">例：900 / 9:00 / 0900</div>
         </div>
       </div>
     </div>
@@ -108,15 +128,16 @@
       <div class="row-controls" style="justify-content: space-between;">
         <div>
           <label style="margin:0;">祝日</label>
-          <div class="muted">自動判定＋手動リスト（手動が優先）</div>
+          <div class="muted">自動判定＋手動リスト（補正用）</div>
         </div>
         <div class="row-controls">
           <label class="muted" style="margin:0; display:flex; align-items:center; gap:8px;">
             <input id="useAutoHoliday" type="checkbox" checked style="width:auto; margin:0;" />
-            自動判定を使う
+            自動判定
           </label>
-          <button id="addHoliday">祝日を追加</button>
-          <button id="clearHoliday">祝日を全消し</button>
+          <button id="fillHoliday">期間の祝日を自動入力</button>
+          <button id="addHoliday">追加</button>
+          <button id="clearHoliday">全消し</button>
         </div>
       </div>
 
@@ -138,8 +159,8 @@
           <div class="muted">日付と加算（円/時）</div>
         </div>
         <div class="row-controls">
-          <button id="addSpecial">特別日を追加</button>
-          <button id="clearSpecial">特別日を全消し</button>
+          <button id="addSpecial">追加</button>
+          <button id="clearSpecial">全消し</button>
         </div>
       </div>
 
@@ -159,11 +180,11 @@
       <div class="row-controls" style="justify-content: space-between;">
         <div>
           <label style="margin:0;">勤務</label>
-          <div class="muted">日付 / 出勤 / 総労働（例 7:30, 6:14）</div>
+          <div class="muted">出勤/総労働は「730」「615」でもOK（自動で「7:30」「6:15」に整形）</div>
         </div>
         <div class="row-controls">
           <button id="addRow">行を追加</button>
-          <button id="clearRows">行を全消し</button>
+          <button id="clearRows">全消し</button>
         </div>
       </div>
 
@@ -215,6 +236,11 @@
   const morningEndEl = document.querySelector("#morningEnd");
   const useAutoHolidayEl = document.querySelector("#useAutoHoliday");
 
+  const targetMonthEl = document.querySelector("#targetMonth");
+  const periodTextEl = document.querySelector("#periodText");
+  const pageTitleEl = document.querySelector("#pageTitle");
+  const pageSubtitleEl = document.querySelector("#pageSubtitle");
+
   const sumMorningEl = document.querySelector("#sumMorning");
   const sumHolidayEl = document.querySelector("#sumHoliday");
   const sumSpecialEl = document.querySelector("#sumSpecial");
@@ -223,30 +249,104 @@
   const pad2 = n => String(n).padStart(2,'0');
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
-  function normalizeTimeString(s) {
+  function ymd(d) {
+    const y = d.getFullYear();
+    const m = pad2(d.getMonth() + 1);
+    const da = pad2(d.getDate());
+    return `${y}-${m}-${da}`;
+  }
+
+  function formatJP(dateStr) {
+    const [y,m,d] = dateStr.split("-").map(Number);
+    return `${y}/${m}/${d}`;
+  }
+
+  function periodFromTargetMonth(yyyyMm) {
+    const [y, m] = yyyyMm.split("-").map(Number);
+    const end = new Date(y, m - 1, 15);
+    const start = new Date(y, m - 2, 15);
+    return { start, end };
+  }
+
+  let PERIOD = null;
+
+  function setTargetMonth(yyyyMm) {
+    PERIOD = periodFromTargetMonth(yyyyMm);
+    const s = ymd(PERIOD.start);
+    const e = ymd(PERIOD.end);
+    periodTextEl.value = `${s} 〜 ${e}`;
+    pageTitleEl.textContent = `${Number(yyyyMm.slice(0,4))}年${Number(yyyyMm.slice(5,7))}月分 手当計算`;
+    pageSubtitleEl.textContent = `対象期間：${formatJP(s)} 〜 ${formatJP(e)}`;
+    recalcAll();
+  }
+
+  function isInPeriod(dateStr) {
+    if (!PERIOD) return true;
+    const d = new Date(dateStr + "T00:00:00");
+    const s = new Date(PERIOD.start); s.setHours(0,0,0,0);
+    const e = new Date(PERIOD.end);   e.setHours(0,0,0,0);
+    return d >= s && d <= e;
+  }
+
+  function normalizeDigits(s) {
     return String(s ?? "")
       .trim()
       .replace(/：/g, ":")
       .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
   }
 
-  function parseHM(str) {
-    const s = normalizeTimeString(str);
-    if (!s) return null;
-    const m = s.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
-    if (!m) return null;
-    const hh = Number(m[1]);
-    const mm = m[2] ? Number(m[2]) : 0;
-    if (hh < 0 || hh > 47) return null;
-    if (mm < 0 || mm > 59) return null;
+  // 730 / 0730 / 7:30 / 7 / 45 など → 分
+  function parseTimeFlexible(str) {
+    const s0 = normalizeDigits(str);
+    if (!s0) return null;
+
+    // すでに "H:MM" 形式
+    const m1 = s0.match(/^(\d{1,2}):(\d{1,2})$/);
+    if (m1) {
+      const hh = Number(m1[1]);
+      const mm = Number(m1[2]);
+      if (hh < 0 || hh > 47 || mm < 0 || mm > 59) return null;
+      return hh * 60 + mm;
+    }
+
+    // 数字だけ
+    const digits = s0.replace(/\D/g, "");
+    if (!digits) return null;
+
+    if (digits.length <= 2) {
+      // "7" -> 7:00 / "45" -> 0:45
+      const n = Number(digits);
+      if (digits.length === 1) return n * 60;
+      if (digits.length === 2) return n; // 0:MM
+    }
+
+    // 3桁: 730 -> 7:30
+    if (digits.length === 3) {
+      const hh = Number(digits.slice(0,1));
+      const mm = Number(digits.slice(1,3));
+      if (mm > 59) return null;
+      return hh * 60 + mm;
+    }
+
+    // 4桁以上: 0730 / 1230 -> 12:30（先頭4桁を採用）
+    const d4 = digits.slice(0,4);
+    const hh = Number(d4.slice(0,2));
+    const mm = Number(d4.slice(2,4));
+    if (hh < 0 || hh > 47 || mm < 0 || mm > 59) return null;
     return hh * 60 + mm;
   }
 
   function fmtHM(minutes) {
-    if (minutes == null) return "";
     const hh = Math.floor(minutes / 60);
     const mm = minutes % 60;
     return `${hh}:${pad2(mm)}`;
+  }
+
+  // 入力欄を "H:MM" に整形（解釈できる時だけ）
+  function formatInputToHM(inputEl) {
+    const mins = parseTimeFlexible(inputEl.value);
+    if (mins == null) return;
+    inputEl.value = fmtHM(mins);
   }
 
   function roundMinutesTo15(mins) {
@@ -264,16 +364,8 @@
 
   function isWeekend(dateStr) {
     const d = new Date(dateStr + "T00:00:00");
-    if (Number.isNaN(d.getTime())) return false;
     const day = d.getDay();
     return day === 0 || day === 6;
-  }
-
-  function ymd(d) {
-    const y = d.getFullYear();
-    const m = pad2(d.getMonth() + 1);
-    const da = pad2(d.getDate());
-    return `${y}-${m}-${da}`;
   }
 
   function nthWeekdayOfMonth(year, month1to12, weekday0to6, nth) {
@@ -285,21 +377,16 @@
   }
 
   function vernalEquinoxDay(year) {
-    // 1980-2099 近似（公式発表とズレる可能性あり）
     const day = Math.floor(20.8431 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
-    return new Date(year, 2, day); // March
+    return new Date(year, 2, day);
   }
-
   function autumnalEquinoxDay(year) {
-    // 1980-2099 近似（公式発表とズレる可能性あり）
     const day = Math.floor(23.2488 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
-    return new Date(year, 8, day); // September
+    return new Date(year, 8, day);
   }
 
   function buildJapanHolidaySet(year) {
     const set = new Set();
-
-    // fixed
     set.add(`${year}-01-01`);
     set.add(`${year}-02-11`);
     set.add(`${year}-02-23`);
@@ -311,21 +398,16 @@
     set.add(`${year}-11-03`);
     set.add(`${year}-11-23`);
 
-    // happy monday
-    set.add(ymd(nthWeekdayOfMonth(year, 1, 1, 2)));  // Coming of Age Day: 2nd Mon Jan
-    set.add(ymd(nthWeekdayOfMonth(year, 7, 1, 3)));  // Marine Day: 3rd Mon Jul
-    set.add(ymd(nthWeekdayOfMonth(year, 9, 1, 3)));  // Respect for the Aged Day: 3rd Mon Sep
-    set.add(ymd(nthWeekdayOfMonth(year,10, 1, 2)));  // Sports Day: 2nd Mon Oct
+    set.add(ymd(nthWeekdayOfMonth(year, 1, 1, 2)));
+    set.add(ymd(nthWeekdayOfMonth(year, 7, 1, 3)));
+    set.add(ymd(nthWeekdayOfMonth(year, 9, 1, 3)));
+    set.add(ymd(nthWeekdayOfMonth(year,10, 1, 2)));
 
-    // equinox (approx)
     set.add(ymd(vernalEquinoxDay(year)));
     set.add(ymd(autumnalEquinoxDay(year)));
 
-    // Substitute holiday (if holiday is Sunday -> next non-holiday weekday)
-    // Citizens' holiday (a weekday sandwiched between two holidays becomes holiday)
     const isHoliday = (d) => set.has(ymd(d));
-    const addSubstituteAndCitizens = () => {
-      // substitute
+    const run = () => {
       for (let m = 0; m < 12; m++) {
         for (let day = 1; day <= 31; day++) {
           const d = new Date(year, m, day);
@@ -334,14 +416,11 @@
           if (!set.has(key)) continue;
           if (d.getDay() === 0) {
             let nd = new Date(d);
-            do {
-              nd.setDate(nd.getDate() + 1);
-            } while (set.has(ymd(nd)));
+            do { nd.setDate(nd.getDate() + 1); } while (set.has(ymd(nd)));
             set.add(ymd(nd));
           }
         }
       }
-      // citizens' holiday
       for (let m = 0; m < 12; m++) {
         for (let day = 2; day <= 30; day++) {
           const d = new Date(year, m, day);
@@ -354,11 +433,7 @@
         }
       }
     };
-
-    // run twice to settle chains
-    addSubstituteAndCitizens();
-    addSubstituteAndCitizens();
-
+    run(); run();
     return set;
   }
 
@@ -390,6 +465,29 @@
       if (date) set.add(date);
     }
     return set;
+  }
+
+  function clearHolidayRows() {
+    holidayTbody.innerHTML = "";
+  }
+
+  function fillHolidayListForPeriod() {
+    clearHolidayRows();
+    if (!PERIOD) return;
+
+    const map = new Map();
+    map.set(PERIOD.start.getFullYear(), buildJapanHolidaySet(PERIOD.start.getFullYear()));
+    map.set(PERIOD.end.getFullYear(), buildJapanHolidaySet(PERIOD.end.getFullYear()));
+
+    const s = new Date(PERIOD.start); s.setHours(0,0,0,0);
+    const e = new Date(PERIOD.end);   e.setHours(0,0,0,0);
+
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) {
+      const key = ymd(d);
+      const hs = map.get(d.getFullYear());
+      if (hs && hs.has(key)) addHolidayRow(key);
+    }
+    recalcAll();
   }
 
   function addSpecialRow(dateVal="", rateVal="") {
@@ -443,7 +541,7 @@
     const tdStart = document.createElement("td");
     tdStart.setAttribute("data-label", "出勤");
     const inStart = document.createElement("input");
-    inStart.placeholder = "7:30";
+    inStart.placeholder = "730";
     inStart.className = "mono";
     inStart.value = startVal;
     tdStart.appendChild(inStart);
@@ -451,7 +549,7 @@
     const tdDur = document.createElement("td");
     tdDur.setAttribute("data-label", "総労働");
     const inDur = document.createElement("input");
-    inDur.placeholder = "10:00";
+    inDur.placeholder = "630";
     inDur.className = "mono";
     inDur.value = durVal;
     tdDur.appendChild(inDur);
@@ -491,6 +589,14 @@
     btn.addEventListener("click", () => { tr.remove(); recalcAll(); });
     tdDel.appendChild(btn);
 
+    // blurで自動整形（入力中に邪魔しない）
+    inStart.addEventListener("blur", () => { formatInputToHM(inStart); recalcAll(); });
+    inDur.addEventListener("blur", () => { formatInputToHM(inDur); recalcAll(); });
+
+    // これらも同様に整形
+    morningStartEl.addEventListener("blur", () => { formatInputToHM(morningStartEl); recalcAll(); });
+    morningEndEl.addEventListener("blur", () => { formatInputToHM(morningEndEl); recalcAll(); });
+
     [inDate, inStart, inDur].forEach(el => el.addEventListener("input", recalcAll));
 
     tr.append(
@@ -507,8 +613,8 @@
     const morningRate = Number(morningRateEl.value || 0);
     const holidayRate = Number(holidayRateEl.value || 0);
 
-    const mStart = parseHM(morningStartEl.value);
-    const mEnd = parseHM(morningEndEl.value);
+    const mStart = parseTimeFlexible(morningStartEl.value);
+    const mEnd = parseTimeFlexible(morningEndEl.value);
     const morningStart = (mStart == null ? 6*60 : mStart);
     const morningEnd = (mEnd == null ? 9*60 : mEnd);
 
@@ -516,22 +622,14 @@
     const manualHoliday = readManualHolidaySet();
     const useAuto = useAutoHolidayEl.checked;
 
-    let yearsInUse = new Set();
-    for (const tr of workTbody.querySelectorAll("tr")) {
-      const dateStr = tr.querySelector('input[type="date"]').value;
-      if (!dateStr) continue;
-      yearsInUse.add(Number(dateStr.slice(0,4)));
-    }
+    const years = new Set();
+    if (PERIOD) { years.add(PERIOD.start.getFullYear()); years.add(PERIOD.end.getFullYear()); }
+    const autoMap = new Map();
+    if (useAuto) for (const y of years) autoMap.set(y, buildJapanHolidaySet(y));
 
-    const autoHolidayByYear = new Map();
-    if (useAuto) {
-      for (const y of yearsInUse) autoHolidayByYear.set(y, buildJapanHolidaySet(y));
-    }
-
-    const isHolidayAuto = (dateStr) => {
-      const y = Number(dateStr.slice(0,4));
-      const set = autoHolidayByYear.get(y);
-      return set ? set.has(dateStr) : false;
+    const isAutoHoliday = (dateStr) => {
+      const hs = autoMap.get(Number(dateStr.slice(0,4)));
+      return hs ? hs.has(dateStr) : false;
     };
 
     let sumMorning = 0;
@@ -541,8 +639,9 @@
     for (const tr of workTbody.querySelectorAll("tr")) {
       const tds = tr.querySelectorAll("td");
       const dateStr = tds[0].querySelector('input[type="date"]').value;
-      const startMin = parseHM(tds[1].querySelector("input").value);
-      const durMinRaw = parseHM(tds[2].querySelector("input").value);
+
+      const startMin = parseTimeFlexible(tds[1].querySelector("input").value);
+      const durMinRaw = parseTimeFlexible(tds[2].querySelector("input").value);
 
       const tdEnd = tds[3];
       const tdMorningH = tds[4];
@@ -558,6 +657,7 @@
       tdSpecialH.textContent = ""; tdSpecialY.textContent = "";
 
       if (!dateStr || startMin == null || durMinRaw == null) continue;
+      if (!isInPeriod(dateStr)) continue;
 
       const durMin = roundMinutesTo15(durMinRaw);
       const totalHours = durMin / 60;
@@ -570,7 +670,11 @@
       const morningHours = minutesToHoursRounded(overlapMinRaw);
       const morningYen = morningHours * morningRate;
 
-      const holidayLike = isWeekend(dateStr) || manualHoliday.has(dateStr) || (useAuto && isHolidayAuto(dateStr));
+      const holidayLike =
+        isWeekend(dateStr) ||
+        manualHoliday.has(dateStr) ||
+        (useAuto && isAutoHoliday(dateStr));
+
       const holidayHours = holidayLike ? totalHours : 0;
       const holidayYen = holidayHours * holidayRate;
 
@@ -592,23 +696,28 @@
       sumSpecial += specialYen;
     }
 
-    const sumAll = sumMorning + sumHoliday + sumSpecial;
-
-    sumMorningEl.textContent = Math.floor(sumMorning).toString();
-    sumHolidayEl.textContent = Math.floor(sumHoliday).toString();
-    sumSpecialEl.textContent = Math.floor(sumSpecial).toString();
-    sumAllEl.textContent = Math.floor(sumAll).toString();
+    sumMorningEl.textContent = String(Math.floor(sumMorning));
+    sumHolidayEl.textContent = String(Math.floor(sumHoliday));
+    sumSpecialEl.textContent = String(Math.floor(sumSpecial));
+    sumAllEl.textContent = String(Math.floor(sumMorning + sumHoliday + sumSpecial));
   }
 
-  // initial rows
-  addWorkRow();
-  addSpecialRow("2026-01-02", "200");
-  addSpecialRow("2026-01-03", "200");
-  addSpecialRow("2026-01-04", "200");
-  addHolidayRow("2026-01-01");
-  addHolidayRow("2026-01-12");
+  // init
+  (function init() {
+    const now = new Date();
+    targetMonthEl.value = `${now.getFullYear()}-${pad2(now.getMonth()+1)}`;
+    setTargetMonth(targetMonthEl.value);
 
-  // buttons
+    // 入力欄（モーニング時間帯）も blur 整形
+    morningStartEl.addEventListener("blur", () => formatInputToHM(morningStartEl));
+    morningEndEl.addEventListener("blur", () => formatInputToHM(morningEndEl));
+
+    addWorkRow();
+  })();
+
+  // Buttons
+  document.querySelector("#applyMonth").addEventListener("click", () => setTargetMonth(targetMonthEl.value));
+
   document.querySelector("#addRow").addEventListener("click", () => { addWorkRow(); recalcAll(); });
   document.querySelector("#clearRows").addEventListener("click", () => { workTbody.innerHTML = ""; addWorkRow(); recalcAll(); });
 
@@ -617,12 +726,11 @@
 
   document.querySelector("#addHoliday").addEventListener("click", () => { addHolidayRow(""); recalcAll(); });
   document.querySelector("#clearHoliday").addEventListener("click", () => { holidayTbody.innerHTML = ""; recalcAll(); });
+  document.querySelector("#fillHoliday").addEventListener("click", () => fillHolidayListForPeriod());
 
-  // inputs
-  [morningRateEl, holidayRateEl, roundingGraceEl, morningStartEl, morningEndEl, useAutoHolidayEl]
+  // Inputs
+  [morningRateEl, holidayRateEl, roundingGraceEl, useAutoHolidayEl, targetMonthEl]
     .forEach(el => el.addEventListener("input", recalcAll));
-
-  recalcAll();
 </script>
 </body>
 </html>
