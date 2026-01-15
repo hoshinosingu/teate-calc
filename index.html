@@ -3,18 +3,18 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>手当計算（モーニング/休日/特別）</title>
+  <title>手当計算</title>
   <style>
     body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 16px; line-height: 1.4; }
     h1 { font-size: 18px; margin: 0 0 12px; }
     .grid { display: grid; gap: 12px; grid-template-columns: 1fr; max-width: 1200px; }
     .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
     label { display:block; font-size: 12px; color:#444; margin-top: 6px; }
-    input { width: 100%; padding: 8px; border:1px solid #ccc; border-radius: 8px; font-size: 14px; }
+    input, select { width: 100%; padding: 8px; border:1px solid #ccc; border-radius: 8px; font-size: 14px; }
     table { width:100%; border-collapse: collapse; }
     th, td { border-bottom: 1px solid #eee; padding: 8px; font-size: 13px; text-align: left; vertical-align: top; }
     th { background: #fafafa; position: sticky; top: 0; }
-    .row-controls { display:flex; gap: 8px; flex-wrap: wrap; }
+    .row-controls { display:flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     button { padding: 8px 10px; border:1px solid #ccc; border-radius: 8px; background:#fff; cursor:pointer; }
     button:hover { background:#f6f6f6; }
     .muted { color:#666; font-size: 12px; }
@@ -23,98 +23,119 @@
     .summary { display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     .sumBox { border: 1px dashed #ccc; border-radius: 10px; padding: 10px; }
     .sumBox b { font-size: 18px; }
-/* ===== スマホ最適化 ===== */
-@media (max-width: 768px) {
-  body {
-    margin: 10px;
-  }
+    .two { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .three { display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
-  h1 {
-    font-size: 16px;
-    text-align: center;
-  }
+    @media (max-width: 768px) {
+      body { margin: 10px; }
+      h1 { font-size: 16px; text-align: center; }
+      input, select { font-size: 16px; }
 
-  table {
-    display: block;
-  }
+      table { display: block; }
+      thead { display: none; }
 
-  thead {
-    display: none;
-  }
+      tbody tr {
+        display: block;
+        margin-bottom: 14px;
+        border: 1px solid #ddd;
+        border-radius: 12px;
+        padding: 10px;
+        background: #fff;
+      }
 
-  tbody tr {
-    display: block;
-    margin-bottom: 14px;
-    border: 1px solid #ddd;
-    border-radius: 12px;
-    padding: 10px;
-    background: #fff;
-  }
+      tbody td {
+        display: flex;
+        justify-content: space-between;
+        border: none;
+        padding: 6px 0;
+        font-size: 14px;
+      }
 
-  tbody td {
-    display: flex;
-    justify-content: space-between;
-    border: none;
-    padding: 6px 0;
-    font-size: 14px;
-  }
+      tbody td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #555;
+      }
 
-  tbody td::before {
-    content: attr(data-label);
-    font-weight: 600;
-    color: #555;
-  }
+      .sumBox b { font-size: 22px; }
 
-  input {
-    font-size: 16px; /* iOSズーム防止 */
-  }
-
-  .sumBox b {
-    font-size: 22px;
-  }
-
-  .summary {
-    position: sticky;
-    bottom: 0;
-    background: #fff;
-    padding: 10px;
-    border-top: 2px solid #ddd;
-    z-index: 10;
-  }
-}
+      .summary {
+        position: sticky;
+        bottom: 0;
+        background: #fff;
+        padding: 10px;
+        border-top: 2px solid #ddd;
+        z-index: 10;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>バイト手当計算（モーニング / 休日(土日) / 特別日）</h1>
+  <h1>手当計算</h1>
 
   <div class="grid">
+
     <div class="card">
-      <div style="display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+      <div class="three">
         <div>
           <label>モーニング手当（円/時）</label>
-          <input id="morningRate" type="number" value="0" min="0" step="1" />
-          <div class="muted">例：+50円/時なら 50</div>
+          <input id="morningRate" type="number" min="0" step="1" value="50" />
         </div>
         <div>
-          <label>休日手当（土日）（円/時）</label>
-          <input id="weekendRate" type="number" value="100" min="0" step="1" />
+          <label>休日手当（土日・祝日）（円/時）</label>
+          <input id="holidayRate" type="number" min="0" step="1" value="100" />
         </div>
         <div>
-          <label>モーニング時間帯</label>
-          <div style="display:flex; gap:8px;">
-            <input id="morningStart" class="mono" value="6:00" />
-            <input id="morningEnd" class="mono" value="9:00" />
-          </div>
-          <div class="muted">固定ならこのままでOK</div>
+          <label>端数（15分単位）切り上げ許容（分）</label>
+          <input id="roundingGrace" type="number" min="0" max="14" step="1" value="0" />
+          <div class="muted">0=切り捨てのみ / 1=14分だけ切り上げ / 2=13〜14分切り上げ</div>
+        </div>
+      </div>
+
+      <div class="two" style="margin-top:10px;">
+        <div>
+          <label>モーニング時間帯（開始）</label>
+          <input id="morningStart" class="mono" value="6:00" />
+        </div>
+        <div>
+          <label>モーニング時間帯（終了）</label>
+          <input id="morningEnd" class="mono" value="9:00" />
         </div>
       </div>
     </div>
 
     <div class="card">
-      <div style="display:flex; gap:12px; flex-wrap: wrap; align-items: end;">
-        <div style="min-width:220px; flex:1;">
-          <label>特別日（正月・GW・盆など）</label>
-          <div class="muted">日付と「+○円/時」を追加するだけで後付け</div>
+      <div class="row-controls" style="justify-content: space-between;">
+        <div>
+          <label style="margin:0;">祝日</label>
+          <div class="muted">自動判定＋手動リスト（手動が優先）</div>
+        </div>
+        <div class="row-controls">
+          <label class="muted" style="margin:0; display:flex; align-items:center; gap:8px;">
+            <input id="useAutoHoliday" type="checkbox" checked style="width:auto; margin:0;" />
+            自動判定を使う
+          </label>
+          <button id="addHoliday">祝日を追加</button>
+          <button id="clearHoliday">祝日を全消し</button>
+        </div>
+      </div>
+
+      <table id="holidayTable" style="margin-top:10px;">
+        <thead>
+          <tr>
+            <th style="width:200px;">日付</th>
+            <th style="width:90px;"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="row-controls" style="justify-content: space-between;">
+        <div>
+          <label style="margin:0;">特別日（+α）</label>
+          <div class="muted">日付と加算（円/時）</div>
         </div>
         <div class="row-controls">
           <button id="addSpecial">特別日を追加</button>
@@ -125,22 +146,20 @@
       <table id="specialTable" style="margin-top:10px;">
         <thead>
           <tr>
-            <th style="width:170px;">日付</th>
-            <th style="width:170px;">加算（円/時）</th>
+            <th style="width:200px;">日付</th>
+            <th style="width:200px;">加算（円/時）</th>
             <th style="width:90px;"></th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
-
-      <div class="muted">例：2026-01-02 / 2026-01-03 / 2026-01-04 を +200 にする</div>
     </div>
 
     <div class="card">
-      <div style="display:flex; gap:12px; flex-wrap: wrap; align-items: end;">
-        <div style="min-width:220px; flex:1;">
-          <label>勤務入力</label>
-          <div class="muted">入力は「日付 / 出勤(例7:30) / 総労働(例6:14)」だけ</div>
+      <div class="row-controls" style="justify-content: space-between;">
+        <div>
+          <label style="margin:0;">勤務</label>
+          <div class="muted">日付 / 出勤 / 総労働（例 7:30, 6:14）</div>
         </div>
         <div class="row-controls">
           <button id="addRow">行を追加</button>
@@ -170,30 +189,41 @@
         </thead>
         <tbody></tbody>
       </table>
-
-      <div class="muted" style="margin-top:8px;">
-        ・切り捨ては <b>15分単位で必ず切り捨て</b>（分で処理）<br>
-        ・モーニングは <b>6:00〜9:00</b> と勤務の重なり分だけ<br>
-        ・休日は <b>土日だけ</b>（特別日と重なれば結果的に +300/時 になる）<br>
-      </div>
     </div>
 
     <div class="card">
-      <label>集計結果</label>
+      <label>集計</label>
       <div class="summary">
-        <div class="sumBox">モーニング手当 合計（円）<br><b id="sumMorning">0</b></div>
-        <div class="sumBox">休日手当 合計（円）<br><b id="sumWeekend">0</b></div>
-        <div class="sumBox">特別手当 合計（円）<br><b id="sumSpecial">0</b></div>
-        <div class="sumBox">全部の合計（円）<br><b id="sumAll">0</b></div>
+        <div class="sumBox">モーニング合計（円）<br><b id="sumMorning">0</b></div>
+        <div class="sumBox">休日合計（円）<br><b id="sumHoliday">0</b></div>
+        <div class="sumBox">特別合計（円）<br><b id="sumSpecial">0</b></div>
+        <div class="sumBox">全部合計（円）<br><b id="sumAll">0</b></div>
       </div>
     </div>
+
   </div>
 
 <script>
+  const workTbody = document.querySelector("#workTable tbody");
+  const specialTbody = document.querySelector("#specialTable tbody");
+  const holidayTbody = document.querySelector("#holidayTable tbody");
+
+  const morningRateEl = document.querySelector("#morningRate");
+  const holidayRateEl = document.querySelector("#holidayRate");
+  const roundingGraceEl = document.querySelector("#roundingGrace");
+  const morningStartEl = document.querySelector("#morningStart");
+  const morningEndEl = document.querySelector("#morningEnd");
+  const useAutoHolidayEl = document.querySelector("#useAutoHoliday");
+
+  const sumMorningEl = document.querySelector("#sumMorning");
+  const sumHolidayEl = document.querySelector("#sumHoliday");
+  const sumSpecialEl = document.querySelector("#sumSpecial");
+  const sumAllEl = document.querySelector("#sumAll");
+
   const pad2 = n => String(n).padStart(2,'0');
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
   function normalizeTimeString(s) {
-    // "6：14" (全角コロン) や "6：１４" も受けたい
     return String(s ?? "")
       .trim()
       .replace(/：/g, ":")
@@ -201,7 +231,6 @@
   }
 
   function parseHM(str) {
-    // "7:30" "07:30" "7" -> minutes
     const s = normalizeTimeString(str);
     if (!s) return null;
     const m = s.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
@@ -220,33 +249,148 @@
     return `${hh}:${pad2(mm)}`;
   }
 
-  // ★ここがポイント：分のまま15分単位で切り捨て
-  function floorMinutesTo15(mins) {
-    return Math.floor(mins / 15) * 15;
+  function roundMinutesTo15(mins) {
+    const grace = clamp(Number(roundingGraceEl.value || 0), 0, 14);
+    const rem = mins % 15;
+    if (rem === 0) return mins;
+    const toNext = 15 - rem;
+    if (toNext <= grace) return mins + toNext;
+    return mins - rem;
   }
-  function minutesToQuarterHours(mins) {
-    return floorMinutesTo15(mins) / 60;
+
+  function minutesToHoursRounded(mins) {
+    return roundMinutesTo15(mins) / 60;
   }
 
   function isWeekend(dateStr) {
     const d = new Date(dateStr + "T00:00:00");
     if (Number.isNaN(d.getTime())) return false;
-    const day = d.getDay(); // 0 Sun ... 6 Sat
+    const day = d.getDay();
     return day === 0 || day === 6;
   }
 
-  const workTbody = document.querySelector("#workTable tbody");
-  const specialTbody = document.querySelector("#specialTable tbody");
+  function ymd(d) {
+    const y = d.getFullYear();
+    const m = pad2(d.getMonth() + 1);
+    const da = pad2(d.getDate());
+    return `${y}-${m}-${da}`;
+  }
 
-  const morningRateEl = document.querySelector("#morningRate");
-  const weekendRateEl = document.querySelector("#weekendRate");
-  const morningStartEl = document.querySelector("#morningStart");
-  const morningEndEl = document.querySelector("#morningEnd");
+  function nthWeekdayOfMonth(year, month1to12, weekday0to6, nth) {
+    const first = new Date(year, month1to12 - 1, 1);
+    const firstW = first.getDay();
+    const delta = (weekday0to6 - firstW + 7) % 7;
+    const day = 1 + delta + (nth - 1) * 7;
+    return new Date(year, month1to12 - 1, day);
+  }
 
-  const sumMorningEl = document.querySelector("#sumMorning");
-  const sumWeekendEl = document.querySelector("#sumWeekend");
-  const sumSpecialEl = document.querySelector("#sumSpecial");
-  const sumAllEl = document.querySelector("#sumAll");
+  function vernalEquinoxDay(year) {
+    // 1980-2099 近似（公式発表とズレる可能性あり）
+    const day = Math.floor(20.8431 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+    return new Date(year, 2, day); // March
+  }
+
+  function autumnalEquinoxDay(year) {
+    // 1980-2099 近似（公式発表とズレる可能性あり）
+    const day = Math.floor(23.2488 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+    return new Date(year, 8, day); // September
+  }
+
+  function buildJapanHolidaySet(year) {
+    const set = new Set();
+
+    // fixed
+    set.add(`${year}-01-01`);
+    set.add(`${year}-02-11`);
+    set.add(`${year}-02-23`);
+    set.add(`${year}-04-29`);
+    set.add(`${year}-05-03`);
+    set.add(`${year}-05-04`);
+    set.add(`${year}-05-05`);
+    set.add(`${year}-08-11`);
+    set.add(`${year}-11-03`);
+    set.add(`${year}-11-23`);
+
+    // happy monday
+    set.add(ymd(nthWeekdayOfMonth(year, 1, 1, 2)));  // Coming of Age Day: 2nd Mon Jan
+    set.add(ymd(nthWeekdayOfMonth(year, 7, 1, 3)));  // Marine Day: 3rd Mon Jul
+    set.add(ymd(nthWeekdayOfMonth(year, 9, 1, 3)));  // Respect for the Aged Day: 3rd Mon Sep
+    set.add(ymd(nthWeekdayOfMonth(year,10, 1, 2)));  // Sports Day: 2nd Mon Oct
+
+    // equinox (approx)
+    set.add(ymd(vernalEquinoxDay(year)));
+    set.add(ymd(autumnalEquinoxDay(year)));
+
+    // Substitute holiday (if holiday is Sunday -> next non-holiday weekday)
+    // Citizens' holiday (a weekday sandwiched between two holidays becomes holiday)
+    const isHoliday = (d) => set.has(ymd(d));
+    const addSubstituteAndCitizens = () => {
+      // substitute
+      for (let m = 0; m < 12; m++) {
+        for (let day = 1; day <= 31; day++) {
+          const d = new Date(year, m, day);
+          if (d.getMonth() !== m) continue;
+          const key = ymd(d);
+          if (!set.has(key)) continue;
+          if (d.getDay() === 0) {
+            let nd = new Date(d);
+            do {
+              nd.setDate(nd.getDate() + 1);
+            } while (set.has(ymd(nd)));
+            set.add(ymd(nd));
+          }
+        }
+      }
+      // citizens' holiday
+      for (let m = 0; m < 12; m++) {
+        for (let day = 2; day <= 30; day++) {
+          const d = new Date(year, m, day);
+          if (d.getMonth() !== m) continue;
+          const prev = new Date(d); prev.setDate(prev.getDate() - 1);
+          const next = new Date(d); next.setDate(next.getDate() + 1);
+          if (!isHoliday(d) && isHoliday(prev) && isHoliday(next) && d.getDay() !== 0 && d.getDay() !== 6) {
+            set.add(ymd(d));
+          }
+        }
+      }
+    };
+
+    // run twice to settle chains
+    addSubstituteAndCitizens();
+    addSubstituteAndCitizens();
+
+    return set;
+  }
+
+  function addHolidayRow(dateVal="") {
+    const tr = document.createElement("tr");
+
+    const tdDate = document.createElement("td");
+    const inDate = document.createElement("input");
+    inDate.type = "date";
+    inDate.value = dateVal;
+    tdDate.appendChild(inDate);
+
+    const tdDel = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.textContent = "削除";
+    btn.addEventListener("click", () => { tr.remove(); recalcAll(); });
+    tdDel.appendChild(btn);
+
+    inDate.addEventListener("input", recalcAll);
+
+    tr.append(tdDate, tdDel);
+    holidayTbody.appendChild(tr);
+  }
+
+  function readManualHolidaySet() {
+    const set = new Set();
+    for (const tr of holidayTbody.querySelectorAll("tr")) {
+      const date = tr.querySelector('input[type="date"]').value;
+      if (date) set.add(date);
+    }
+    return set;
+  }
 
   function addSpecialRow(dateVal="", rateVal="") {
     const tr = document.createElement("tr");
@@ -276,11 +420,6 @@
     specialTbody.appendChild(tr);
   }
 
-  // 初期：正月例（不要なら消してOK）
-  addSpecialRow("2026-01-02", "200");
-  addSpecialRow("2026-01-03", "200");
-  addSpecialRow("2026-01-04", "200");
-
   function readSpecials() {
     const map = new Map();
     for (const tr of specialTbody.querySelectorAll("tr")) {
@@ -292,91 +431,111 @@
   }
 
   function addWorkRow(dateVal="", startVal="", durVal="") {
-  const tr = document.createElement("tr");
+    const tr = document.createElement("tr");
 
-  const tdDate = document.createElement("td");
-  tdDate.setAttribute("data-label", "日付");
-  const inDate = document.createElement("input");
-  inDate.type = "date";
-  inDate.value = dateVal;
-  tdDate.appendChild(inDate);
+    const tdDate = document.createElement("td");
+    tdDate.setAttribute("data-label", "日付");
+    const inDate = document.createElement("input");
+    inDate.type = "date";
+    inDate.value = dateVal;
+    tdDate.appendChild(inDate);
 
-  const tdStart = document.createElement("td");
-  tdStart.setAttribute("data-label", "出勤");
-  const inStart = document.createElement("input");
-  inStart.placeholder = "7:30";
-  inStart.className = "mono";
-  inStart.value = startVal;
-  tdStart.appendChild(inStart);
+    const tdStart = document.createElement("td");
+    tdStart.setAttribute("data-label", "出勤");
+    const inStart = document.createElement("input");
+    inStart.placeholder = "7:30";
+    inStart.className = "mono";
+    inStart.value = startVal;
+    tdStart.appendChild(inStart);
 
-  const tdDur = document.createElement("td");
-  tdDur.setAttribute("data-label", "総労働");
-  const inDur = document.createElement("input");
-  inDur.placeholder = "6:14";
-  inDur.className = "mono";
-  inDur.value = durVal;
-  tdDur.appendChild(inDur);
+    const tdDur = document.createElement("td");
+    tdDur.setAttribute("data-label", "総労働");
+    const inDur = document.createElement("input");
+    inDur.placeholder = "10:00";
+    inDur.className = "mono";
+    inDur.value = durVal;
+    tdDur.appendChild(inDur);
 
-  const tdEnd = document.createElement("td");
-  tdEnd.setAttribute("data-label", "退勤");
-  tdEnd.className = "mono";
+    const tdEnd = document.createElement("td");
+    tdEnd.setAttribute("data-label", "退勤");
+    tdEnd.className = "mono";
 
-  const tdMorningH = document.createElement("td");
-  tdMorningH.setAttribute("data-label", "朝(h)");
-  tdMorningH.className = "mono";
+    const tdMorningH = document.createElement("td");
+    tdMorningH.setAttribute("data-label", "朝(h)");
+    tdMorningH.className = "mono";
 
-  const tdMorningY = document.createElement("td");
-  tdMorningY.setAttribute("data-label", "朝(円)");
-  tdMorningY.className = "right mono";
+    const tdMorningY = document.createElement("td");
+    tdMorningY.setAttribute("data-label", "朝(円)");
+    tdMorningY.className = "right mono";
 
-  const tdWeekendH = document.createElement("td");
-  tdWeekendH.setAttribute("data-label", "休日(h)");
-  tdWeekendH.className = "mono";
+    const tdHolidayH = document.createElement("td");
+    tdHolidayH.setAttribute("data-label", "休日(h)");
+    tdHolidayH.className = "mono";
 
-  const tdWeekendY = document.createElement("td");
-  tdWeekendY.setAttribute("data-label", "休日(円)");
-  tdWeekendY.className = "right mono";
+    const tdHolidayY = document.createElement("td");
+    tdHolidayY.setAttribute("data-label", "休日(円)");
+    tdHolidayY.className = "right mono";
 
-  const tdSpecialH = document.createElement("td");
-  tdSpecialH.setAttribute("data-label", "特別(h)");
-  tdSpecialH.className = "mono";
+    const tdSpecialH = document.createElement("td");
+    tdSpecialH.setAttribute("data-label", "特別(h)");
+    tdSpecialH.className = "mono";
 
-  const tdSpecialY = document.createElement("td");
-  tdSpecialY.setAttribute("data-label", "特別(円)");
-  tdSpecialY.className = "right mono";
+    const tdSpecialY = document.createElement("td");
+    tdSpecialY.setAttribute("data-label", "特別(円)");
+    tdSpecialY.className = "right mono";
 
-  const tdDel = document.createElement("td");
-  tdDel.setAttribute("data-label", "操作");
-  const btn = document.createElement("button");
-  btn.textContent = "削除";
-  btn.addEventListener("click", () => { tr.remove(); recalcAll(); });
-  tdDel.appendChild(btn);
+    const tdDel = document.createElement("td");
+    tdDel.setAttribute("data-label", "操作");
+    const btn = document.createElement("button");
+    btn.textContent = "削除";
+    btn.addEventListener("click", () => { tr.remove(); recalcAll(); });
+    tdDel.appendChild(btn);
 
-  [inDate, inStart, inDur].forEach(el => el.addEventListener("input", recalcAll));
+    [inDate, inStart, inDur].forEach(el => el.addEventListener("input", recalcAll));
 
-  tr.append(
-    tdDate, tdStart, tdDur, tdEnd,
-    tdMorningH, tdMorningY,
-    tdWeekendH, tdWeekendY,
-    tdSpecialH, tdSpecialY,
-    tdDel
-  );
-  workTbody.appendChild(tr);
-}
-
-  addWorkRow();
+    tr.append(
+      tdDate, tdStart, tdDur, tdEnd,
+      tdMorningH, tdMorningY,
+      tdHolidayH, tdHolidayY,
+      tdSpecialH, tdSpecialY,
+      tdDel
+    );
+    workTbody.appendChild(tr);
+  }
 
   function recalcAll() {
     const morningRate = Number(morningRateEl.value || 0);
-    const weekendRate = Number(weekendRateEl.value || 0);
+    const holidayRate = Number(holidayRateEl.value || 0);
 
-    const morningStart = parseHM(morningStartEl.value) ?? (6*60);
-    const morningEnd = parseHM(morningEndEl.value) ?? (9*60);
+    const mStart = parseHM(morningStartEl.value);
+    const mEnd = parseHM(morningEndEl.value);
+    const morningStart = (mStart == null ? 6*60 : mStart);
+    const morningEnd = (mEnd == null ? 9*60 : mEnd);
 
     const specials = readSpecials();
+    const manualHoliday = readManualHolidaySet();
+    const useAuto = useAutoHolidayEl.checked;
+
+    let yearsInUse = new Set();
+    for (const tr of workTbody.querySelectorAll("tr")) {
+      const dateStr = tr.querySelector('input[type="date"]').value;
+      if (!dateStr) continue;
+      yearsInUse.add(Number(dateStr.slice(0,4)));
+    }
+
+    const autoHolidayByYear = new Map();
+    if (useAuto) {
+      for (const y of yearsInUse) autoHolidayByYear.set(y, buildJapanHolidaySet(y));
+    }
+
+    const isHolidayAuto = (dateStr) => {
+      const y = Number(dateStr.slice(0,4));
+      const set = autoHolidayByYear.get(y);
+      return set ? set.has(dateStr) : false;
+    };
 
     let sumMorning = 0;
-    let sumWeekend = 0;
+    let sumHoliday = 0;
     let sumSpecial = 0;
 
     for (const tr of workTbody.querySelectorAll("tr")) {
@@ -386,45 +545,35 @@
       const durMinRaw = parseHM(tds[2].querySelector("input").value);
 
       const tdEnd = tds[3];
-
       const tdMorningH = tds[4];
       const tdMorningY = tds[5];
-
-      const tdWeekendH = tds[6];
-      const tdWeekendY = tds[7];
-
+      const tdHolidayH = tds[6];
+      const tdHolidayY = tds[7];
       const tdSpecialH = tds[8];
       const tdSpecialY = tds[9];
 
       tdEnd.textContent = "";
       tdMorningH.textContent = ""; tdMorningY.textContent = "";
-      tdWeekendH.textContent = ""; tdWeekendY.textContent = "";
+      tdHolidayH.textContent = ""; tdHolidayY.textContent = "";
       tdSpecialH.textContent = ""; tdSpecialY.textContent = "";
 
       if (!dateStr || startMin == null || durMinRaw == null) continue;
 
-      // ★総労働時間は「分」で15分切り捨てしてから使う
-      const durMin = floorMinutesTo15(durMinRaw);
-
-      const endMin = startMin + durMinRaw; // 退勤表示は入力値そのまま（必要なら durMin にしてもOK）
-      tdEnd.textContent = fmtHM(endMin);
-
-      // 総労働(時間) 15分切り捨て済み
+      const durMin = roundMinutesTo15(durMinRaw);
       const totalHours = durMin / 60;
 
-      // モーニング重なり（分）→15分切り捨て
+      tdEnd.textContent = fmtHM(startMin + durMinRaw);
+
       const overlapStart = Math.max(startMin, morningStart);
       const overlapEnd = Math.min(startMin + durMinRaw, morningEnd);
       const overlapMinRaw = Math.max(0, overlapEnd - overlapStart);
-      const morningHours = minutesToQuarterHours(overlapMinRaw);
-
+      const morningHours = minutesToHoursRounded(overlapMinRaw);
       const morningYen = morningHours * morningRate;
 
-      // 休日（土日）: 総労働時間を適用（切り捨て済み）
-      const weekendHours = isWeekend(dateStr) ? totalHours : 0;
-      const weekendYen = weekendHours * weekendRate;
+      const holidayLike = isWeekend(dateStr) || manualHoliday.has(dateStr) || (useAuto && isHolidayAuto(dateStr));
+      const holidayHours = holidayLike ? totalHours : 0;
+      const holidayYen = holidayHours * holidayRate;
 
-      // 特別日: 日付一致の +円/時 を総労働時間に適用（切り捨て済み）
       const specialRate = specials.get(dateStr) ?? 0;
       const specialHours = specialRate > 0 ? totalHours : 0;
       const specialYen = specialHours * specialRate;
@@ -432,32 +581,46 @@
       tdMorningH.textContent = morningHours.toFixed(2);
       tdMorningY.textContent = Math.floor(morningYen).toString();
 
-      tdWeekendH.textContent = weekendHours.toFixed(2);
-      tdWeekendY.textContent = Math.floor(weekendYen).toString();
+      tdHolidayH.textContent = holidayHours.toFixed(2);
+      tdHolidayY.textContent = Math.floor(holidayYen).toString();
 
       tdSpecialH.textContent = specialHours.toFixed(2);
       tdSpecialY.textContent = Math.floor(specialYen).toString();
 
       sumMorning += morningYen;
-      sumWeekend += weekendYen;
+      sumHoliday += holidayYen;
       sumSpecial += specialYen;
     }
 
-    const sumAll = sumMorning + sumWeekend + sumSpecial;
+    const sumAll = sumMorning + sumHoliday + sumSpecial;
 
     sumMorningEl.textContent = Math.floor(sumMorning).toString();
-    sumWeekendEl.textContent = Math.floor(sumWeekend).toString();
+    sumHolidayEl.textContent = Math.floor(sumHoliday).toString();
     sumSpecialEl.textContent = Math.floor(sumSpecial).toString();
     sumAllEl.textContent = Math.floor(sumAll).toString();
   }
 
+  // initial rows
+  addWorkRow();
+  addSpecialRow("2026-01-02", "200");
+  addSpecialRow("2026-01-03", "200");
+  addSpecialRow("2026-01-04", "200");
+  addHolidayRow("2026-01-01");
+  addHolidayRow("2026-01-12");
+
+  // buttons
   document.querySelector("#addRow").addEventListener("click", () => { addWorkRow(); recalcAll(); });
   document.querySelector("#clearRows").addEventListener("click", () => { workTbody.innerHTML = ""; addWorkRow(); recalcAll(); });
 
   document.querySelector("#addSpecial").addEventListener("click", () => { addSpecialRow("", ""); recalcAll(); });
   document.querySelector("#clearSpecial").addEventListener("click", () => { specialTbody.innerHTML = ""; recalcAll(); });
 
-  [morningRateEl, weekendRateEl, morningStartEl, morningEndEl].forEach(el => el.addEventListener("input", recalcAll));
+  document.querySelector("#addHoliday").addEventListener("click", () => { addHolidayRow(""); recalcAll(); });
+  document.querySelector("#clearHoliday").addEventListener("click", () => { holidayTbody.innerHTML = ""; recalcAll(); });
+
+  // inputs
+  [morningRateEl, holidayRateEl, roundingGraceEl, morningStartEl, morningEndEl, useAutoHolidayEl]
+    .forEach(el => el.addEventListener("input", recalcAll));
 
   recalcAll();
 </script>
