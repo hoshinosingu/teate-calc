@@ -124,7 +124,10 @@
         </div>
       </div>
 
-
+      <div class="muted" style="margin-top:6px;">
+        
+      </div>
+    </div>
 
     <div class="card">
       <div class="row-controls" style="justify-content: space-between;">
@@ -186,7 +189,7 @@
       <div class="row-controls" style="justify-content: space-between;">
         <div>
           <label style="margin:0;">勤務</label>
-          <div class="muted">出勤/総労働は「730」「615」でもOK（自動で7:30等に整形）</div>
+          <div class="muted">出勤/総労働の入力は「730」「615」でもOK（自動で7:30等に整形）</div>
         </div>
         <div class="row-controls">
           <button id="addRow">行を追加</button>
@@ -226,6 +229,10 @@
         <div class="sumBox">特別合計（円）<br><b id="sumSpecial">0</b></div>
         <div class="sumBox">全部合計（円）<br><b id="sumAll">0</b></div>
       </div>
+      <div class="muted" style="margin-top:6px;">
+        
+      </div>
+    </div>
 
   </div>
 
@@ -579,7 +586,7 @@
     const tdStart = document.createElement("td");
     tdStart.setAttribute("data-label", "出勤");
     const inStart = document.createElement("input");
-    inStart.placeholder = "730";
+    inStart.placeholder = "7:30";
     inStart.className = "mono";
     inStart.value = startVal;
     tdStart.appendChild(inStart);
@@ -587,7 +594,7 @@
     const tdDur = document.createElement("td");
     tdDur.setAttribute("data-label", "総労働");
     const inDur = document.createElement("input");
-    inDur.placeholder = "615";
+    inDur.placeholder = "6:15";
     inDur.className = "mono";
     inDur.value = durVal;
     tdDur.appendChild(inDur);
