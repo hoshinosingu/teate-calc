@@ -31,7 +31,7 @@
       body { margin: 10px; }
       h1 { font-size: 16px; text-align: center; }
       .sub { text-align:center; }
-      input, select { font-size: 16px; }
+      input, select { font-size: 16px; } /* iOSズーム防止 */
 
       table { display: block; }
       thead { display: none; }
@@ -92,6 +92,9 @@
           <button id="applyMonth">この月に更新</button>
         </div>
       </div>
+      <div class="muted" style="margin-top:6px;">
+        ※毎月15日に「何月分」を選んで計算（期間が自動更新）
+      </div>
     </div>
 
     <div class="card">
@@ -119,6 +122,10 @@
           <label>モーニング時間帯（終了）</label>
           <input id="morningEnd" class="mono" value="9:00" />
         </div>
+      </div>
+
+      <div class="muted" style="margin-top:6px;">
+        ※モーニング計算のみ：出勤時刻を±5分補正（〜終了時刻まで）／総労働は変更しない
       </div>
     </div>
 
@@ -148,6 +155,10 @@
         </thead>
         <tbody></tbody>
       </table>
+
+      <div class="muted" style="margin-top:6px;">
+        ※自動判定が外れた場合は、手動リストで補正してください
+      </div>
     </div>
 
     <div class="card">
@@ -178,7 +189,7 @@
       <div class="row-controls" style="justify-content: space-between;">
         <div>
           <label style="margin:0;">勤務</label>
-          <div class="muted">出勤/総労働は「730」「615」でもOK（自動で7:30等に整形）</div>
+          <div class="muted">出勤/総労働は「730」「614」でもOK（フォーカス外れたら7:30等に整形）</div>
         </div>
         <div class="row-controls">
           <button id="addRow">行を追加</button>
@@ -218,11 +229,25 @@
         <div class="sumBox">特別合計（円）<br><b id="sumSpecial">0</b></div>
         <div class="sumBox">全部合計（円）<br><b id="sumAll">0</b></div>
       </div>
+      <div class="muted" style="margin-top:6px;">
+        ※金額の端数は四捨五入（例：62.5→63）
+      </div>
     </div>
 
   </div>
 
 <script>
+  /* 運用メモ（最低限）
+   - 期間：先月16日〜今月15日（「何月分」で自動更新）
+   - 総労働：入力値をそのまま採用（手当計算で労働時間は動かさない）
+   - モーニング：重なり時間のみ計算。出勤時刻を±5分補正（モーニング帯の範囲内のみ）
+   - 祝日：自動＋手動（自動が外れたら手動で補正）
+   - 金額：四捨五入
+   - 保存：入力は端末内に自動保存（ブラウザバック/再読み込みでも復元）
+  */
+
+  const STORAGE_KEY = "allowance_calc_v1";
+
   const workTbody = document.querySelector("#workTable tbody");
   const specialTbody = document.querySelector("#specialTable tbody");
   const holidayTbody = document.querySelector("#holidayTable tbody");
@@ -247,6 +272,11 @@
   const pad2 = n => String(n).padStart(2,'0');
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
+  const MORNING_START_GRACE_MIN = 5; // モーニング計算用：出勤時刻の±許容（分）
+
+  // 日付入力の「前回選んだ日付」を記憶（カレンダーが同じ月を開きやすくする）
+  let lastPickedDate = "";
+
   function ymd(d) {
     const y = d.getFullYear();
     const m = pad2(d.getMonth() + 1);
@@ -259,7 +289,6 @@
     return `${y}/${m}/${d}`;
   }
 
-  // 締め：先月16日〜今月15日
   function periodFromTargetMonth(yyyyMm) {
     const [y, m] = yyyyMm.split("-").map(Number);
     const end = new Date(y, m - 1, 15);
@@ -276,7 +305,6 @@
     periodTextEl.value = `${s} 〜 ${e}`;
     pageTitleEl.textContent = `${Number(yyyyMm.slice(0,4))}年${Number(yyyyMm.slice(5,7))}月分 手当計算`;
     pageSubtitleEl.textContent = `対象期間：${formatJP(s)} 〜 ${formatJP(e)}`;
-    // モーニング入力も常に "H:MM" 表記に整える
     formatInputToHM(morningStartEl);
     formatInputToHM(morningEndEl);
     recalcAll();
@@ -315,8 +343,8 @@
 
     if (digits.length <= 2) {
       const n = Number(digits);
-      if (digits.length === 1) return n * 60;  // "7" -> 7:00
-      if (digits.length === 2) return n;       // "45" -> 0:45
+      if (digits.length === 1) return n * 60;
+      if (digits.length === 2) return n;
     }
 
     if (digits.length === 3) {
@@ -345,6 +373,7 @@
     inputEl.value = fmtHM(mins);
   }
 
+  // 端数丸め：15分単位
   function roundMinutesTo15(mins) {
     const grace = clamp(Number(roundingGraceEl.value || 0), 0, 14);
     const rem = mins % 15;
@@ -381,6 +410,7 @@
     return new Date(year, 8, day);
   }
 
+  // 簡易祝日（例外の年は手動補正）
   function buildJapanHolidaySet(year) {
     const set = new Set();
     set.add(`${year}-01-01`);
@@ -433,6 +463,26 @@
     return set;
   }
 
+  function hookDateInputSmartOpen(inDate) {
+    inDate.addEventListener("focus", () => {
+      if (!inDate.value && lastPickedDate) {
+        inDate.dataset.tempFilled = "1";
+        inDate.value = lastPickedDate;
+      }
+    });
+
+    inDate.addEventListener("input", () => {
+      if (inDate.value) lastPickedDate = inDate.value;
+    });
+
+    inDate.addEventListener("blur", () => {
+      if (inDate.dataset.tempFilled === "1") {
+        if (inDate.value === lastPickedDate) inDate.value = "";
+        delete inDate.dataset.tempFilled;
+      }
+    });
+  }
+
   function addHolidayRow(dateVal="") {
     const tr = document.createElement("tr");
 
@@ -440,6 +490,7 @@
     const inDate = document.createElement("input");
     inDate.type = "date";
     inDate.value = dateVal;
+    hookDateInputSmartOpen(inDate);
     tdDate.appendChild(inDate);
 
     const tdDel = document.createElement("td");
@@ -489,6 +540,7 @@
     const inDate = document.createElement("input");
     inDate.type = "date";
     inDate.value = dateVal;
+    hookDateInputSmartOpen(inDate);
     tdDate.appendChild(inDate);
 
     const tdRate = document.createElement("td");
@@ -528,12 +580,13 @@
     const inDate = document.createElement("input");
     inDate.type = "date";
     inDate.value = dateVal;
+    hookDateInputSmartOpen(inDate);
     tdDate.appendChild(inDate);
 
     const tdStart = document.createElement("td");
     tdStart.setAttribute("data-label", "出勤");
     const inStart = document.createElement("input");
-    inStart.placeholder = "7:30";
+    inStart.placeholder = "730";
     inStart.className = "mono";
     inStart.value = startVal;
     tdStart.appendChild(inStart);
@@ -541,7 +594,7 @@
     const tdDur = document.createElement("td");
     tdDur.setAttribute("data-label", "総労働");
     const inDur = document.createElement("input");
-    inDur.placeholder = "6:15";
+    inDur.placeholder = "614";
     inDur.className = "mono";
     inDur.value = durVal;
     tdDur.appendChild(inDur);
@@ -596,6 +649,123 @@
     workTbody.appendChild(tr);
   }
 
+  // モーニング計算用：出勤時刻を15分境界に±5分で吸着（モーニング帯の範囲内だけ）
+  function adjustStartForMorningWithGrace(startMin, morningStart, morningEnd) {
+    if (startMin < morningStart || startMin > morningEnd) return startMin;
+
+    const rem = startMin % 15;
+    const down = startMin - rem;
+    const up = startMin + (15 - rem);
+
+    const dDown = startMin - down;
+    const dUp = up - startMin;
+
+    if (rem === 0) return startMin;
+
+    let best = startMin;
+    let bestDist = Infinity;
+
+    if (dDown <= MORNING_START_GRACE_MIN) { best = down; bestDist = dDown; }
+    if (dUp <= MORNING_START_GRACE_MIN && dUp < bestDist) { best = up; bestDist = dUp; }
+
+    if (best > morningEnd) best = morningEnd;
+    if (best < morningStart) best = morningStart;
+
+    return best;
+  }
+
+  // ===== 自動保存 =====
+  function snapshotState() {
+    const workRows = [...workTbody.querySelectorAll("tr")].map(tr => {
+      const tds = tr.querySelectorAll("td");
+      return {
+        date: tds[0].querySelector('input[type="date"]').value || "",
+        start: tds[1].querySelector("input").value || "",
+        dur: tds[2].querySelector("input").value || ""
+      };
+    });
+
+    const holidayRows = [...holidayTbody.querySelectorAll("tr")].map(tr =>
+      tr.querySelector('input[type="date"]').value || ""
+    );
+
+    const specialRows = [...specialTbody.querySelectorAll("tr")].map(tr => {
+      const tds = tr.querySelectorAll("td");
+      return {
+        date: tds[0].querySelector('input[type="date"]').value || "",
+        rate: tds[1].querySelector('input[type="number"]').value || ""
+      };
+    });
+
+    return {
+      targetMonth: targetMonthEl.value || "",
+      morningRate: morningRateEl.value || "50",
+      holidayRate: holidayRateEl.value || "100",
+      roundingGrace: roundingGraceEl.value || "0",
+      morningStart: morningStartEl.value || "6:00",
+      morningEnd: morningEndEl.value || "9:00",
+      useAutoHoliday: !!useAutoHolidayEl.checked,
+      lastPickedDate: lastPickedDate || "",
+      workRows,
+      holidayRows,
+      specialRows
+    };
+  }
+
+  function restoreState(state) {
+    if (!state || typeof state !== "object") return;
+
+    if (state.targetMonth) {
+      targetMonthEl.value = state.targetMonth;
+      setTargetMonth(state.targetMonth);
+    }
+
+    morningRateEl.value = state.morningRate ?? "50";
+    holidayRateEl.value = state.holidayRate ?? "100";
+    roundingGraceEl.value = state.roundingGrace ?? "0";
+    morningStartEl.value = state.morningStart ?? "6:00";
+    morningEndEl.value = state.morningEnd ?? "9:00";
+    useAutoHolidayEl.checked = state.useAutoHoliday ?? true;
+    lastPickedDate = state.lastPickedDate ?? "";
+
+    workTbody.innerHTML = "";
+    (state.workRows?.length ? state.workRows : [{}]).forEach(r => {
+      addWorkRow(r.date || "", r.start || "", r.dur || "");
+    });
+
+    holidayTbody.innerHTML = "";
+    (state.holidayRows || []).filter(Boolean).forEach(d => addHolidayRow(d));
+
+    specialTbody.innerHTML = "";
+    (state.specialRows || []).forEach(r => addSpecialRow(r.date || "", r.rate || ""));
+
+    formatInputToHM(morningStartEl);
+    formatInputToHM(morningEndEl);
+
+    recalcAll();
+  }
+
+  let saveTimer = null;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshotState()));
+      } catch {}
+    }, 150);
+  }
+
+  function tryRestoreOnLoad() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      restoreState(JSON.parse(raw));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   function recalcAll() {
     const morningRate = Number(morningRateEl.value || 0);
     const holidayRate = Number(holidayRateEl.value || 0);
@@ -647,8 +817,9 @@
 
       tdEnd.textContent = fmtHM(startMin + durMinRaw);
 
-      const overlapStart = Math.max(startMin, morningStart);
-      const overlapEnd = Math.min(startMin + durMinRaw, morningEnd);
+      const adjStart = adjustStartForMorningWithGrace(startMin, morningStart, morningEnd);
+      const overlapStart = Math.max(adjStart, morningStart);
+      const overlapEnd = Math.min(adjStart + durMinRaw, morningEnd);
       const overlapMinRaw = Math.max(0, overlapEnd - overlapStart);
 
       const morningHours = minutesToHoursRounded(overlapMinRaw);
@@ -667,47 +838,76 @@
       const specialYen = specialHours * specialRate;
 
       tdMorningH.textContent = morningHours.toFixed(2);
-      tdMorningY.textContent = String(Math.floor(morningYen));
+      tdMorningY.textContent = String(Math.round(morningYen));
 
       tdHolidayH.textContent = holidayHours.toFixed(2);
-      tdHolidayY.textContent = String(Math.floor(holidayYen));
+      tdHolidayY.textContent = String(Math.round(holidayYen));
 
       tdSpecialH.textContent = specialHours.toFixed(2);
-      tdSpecialY.textContent = String(Math.floor(specialYen));
+      tdSpecialY.textContent = String(Math.round(specialYen));
 
       sumMorning += morningYen;
       sumHoliday += holidayYen;
       sumSpecial += specialYen;
     }
 
-    sumMorningEl.textContent = String(Math.floor(sumMorning));
-    sumHolidayEl.textContent = String(Math.floor(sumHoliday));
-    sumSpecialEl.textContent = String(Math.floor(sumSpecial));
-    sumAllEl.textContent = String(Math.floor(sumMorning + sumHoliday + sumSpecial));
+    sumMorningEl.textContent = String(Math.round(sumMorning));
+    sumHolidayEl.textContent = String(Math.round(sumHoliday));
+    sumSpecialEl.textContent = String(Math.round(sumSpecial));
+    sumAllEl.textContent = String(Math.round(sumMorning + sumHoliday + sumSpecial));
+
+    scheduleSave();
   }
 
-  // init
-  (function init() {
+  function safeInitDefault() {
     const now = new Date();
     targetMonthEl.value = `${now.getFullYear()}-${pad2(now.getMonth()+1)}`;
     setTargetMonth(targetMonthEl.value);
+    addWorkRow();
+  }
+
+  (function init() {
+    const restored = tryRestoreOnLoad();
+    if (!restored) safeInitDefault();
 
     morningStartEl.addEventListener("blur", () => { formatInputToHM(morningStartEl); recalcAll(); });
     morningEndEl.addEventListener("blur", () => { formatInputToHM(morningEndEl); recalcAll(); });
 
-    addWorkRow();
+    // 初期保存
+    scheduleSave();
   })();
 
-  document.querySelector("#applyMonth").addEventListener("click", () => setTargetMonth(targetMonthEl.value));
+  document.querySelector("#applyMonth").addEventListener("click", () => {
+    setTargetMonth(targetMonthEl.value);
+    scheduleSave();
+  });
+
   document.querySelector("#addRow").addEventListener("click", () => { addWorkRow(); recalcAll(); });
-  document.querySelector("#clearRows").addEventListener("click", () => { workTbody.innerHTML = ""; addWorkRow(); recalcAll(); });
+  document.querySelector("#clearRows").addEventListener("click", () => {
+    if (!confirm("勤務行を全て消しますか？")) return;
+    workTbody.innerHTML = "";
+    addWorkRow();
+    recalcAll();
+  });
 
   document.querySelector("#addSpecial").addEventListener("click", () => { addSpecialRow("", ""); recalcAll(); });
-  document.querySelector("#clearSpecial").addEventListener("click", () => { specialTbody.innerHTML = ""; recalcAll(); });
+  document.querySelector("#clearSpecial").addEventListener("click", () => {
+    if (!confirm("特別日を全て消しますか？")) return;
+    specialTbody.innerHTML = "";
+    recalcAll();
+  });
 
   document.querySelector("#addHoliday").addEventListener("click", () => { addHolidayRow(""); recalcAll(); });
-  document.querySelector("#clearHoliday").addEventListener("click", () => { holidayTbody.innerHTML = ""; recalcAll(); });
-  document.querySelector("#fillHoliday").addEventListener("click", () => fillHolidayListForPeriod());
+  document.querySelector("#clearHoliday").addEventListener("click", () => {
+    if (!confirm("祝日リストを全て消しますか？")) return;
+    holidayTbody.innerHTML = "";
+    recalcAll();
+  });
+  document.querySelector("#fillHoliday").addEventListener("click", () => {
+    if (!confirm("対象期間の祝日を自動入力しますか？（手動リストは上書きされます）")) return;
+    fillHolidayListForPeriod();
+    scheduleSave();
+  });
 
   [morningRateEl, holidayRateEl, roundingGraceEl, useAutoHolidayEl, targetMonthEl]
     .forEach(el => el.addEventListener("input", recalcAll));
