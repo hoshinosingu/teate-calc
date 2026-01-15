@@ -23,6 +23,65 @@
     .summary { display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
     .sumBox { border: 1px dashed #ccc; border-radius: 10px; padding: 10px; }
     .sumBox b { font-size: 18px; }
+/* ===== スマホ最適化 ===== */
+@media (max-width: 768px) {
+  body {
+    margin: 10px;
+  }
+
+  h1 {
+    font-size: 16px;
+    text-align: center;
+  }
+
+  table {
+    display: block;
+  }
+
+  thead {
+    display: none;
+  }
+
+  tbody tr {
+    display: block;
+    margin-bottom: 14px;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 10px;
+    background: #fff;
+  }
+
+  tbody td {
+    display: flex;
+    justify-content: space-between;
+    border: none;
+    padding: 6px 0;
+    font-size: 14px;
+  }
+
+  tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #555;
+  }
+
+  input {
+    font-size: 16px; /* iOSズーム防止 */
+  }
+
+  .sumBox b {
+    font-size: 22px;
+  }
+
+  .summary {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    padding: 10px;
+    border-top: 2px solid #ddd;
+    z-index: 10;
+  }
+}
   </style>
 </head>
 <body>
@@ -233,56 +292,77 @@
   }
 
   function addWorkRow(dateVal="", startVal="", durVal="") {
-    const tr = document.createElement("tr");
+  const tr = document.createElement("tr");
 
-    const tdDate = document.createElement("td");
-    const inDate = document.createElement("input");
-    inDate.type = "date";
-    inDate.value = dateVal;
-    tdDate.appendChild(inDate);
+  const tdDate = document.createElement("td");
+  tdDate.setAttribute("data-label", "日付");
+  const inDate = document.createElement("input");
+  inDate.type = "date";
+  inDate.value = dateVal;
+  tdDate.appendChild(inDate);
 
-    const tdStart = document.createElement("td");
-    const inStart = document.createElement("input");
-    inStart.placeholder = "7:30";
-    inStart.className = "mono";
-    inStart.value = startVal;
-    tdStart.appendChild(inStart);
+  const tdStart = document.createElement("td");
+  tdStart.setAttribute("data-label", "出勤");
+  const inStart = document.createElement("input");
+  inStart.placeholder = "7:30";
+  inStart.className = "mono";
+  inStart.value = startVal;
+  tdStart.appendChild(inStart);
 
-    const tdDur = document.createElement("td");
-    const inDur = document.createElement("input");
-    inDur.placeholder = "6:14";
-    inDur.className = "mono";
-    inDur.value = durVal;
-    tdDur.appendChild(inDur);
+  const tdDur = document.createElement("td");
+  tdDur.setAttribute("data-label", "総労働");
+  const inDur = document.createElement("input");
+  inDur.placeholder = "6:14";
+  inDur.className = "mono";
+  inDur.value = durVal;
+  tdDur.appendChild(inDur);
 
-    const tdEnd = document.createElement("td"); tdEnd.className = "mono";
+  const tdEnd = document.createElement("td");
+  tdEnd.setAttribute("data-label", "退勤");
+  tdEnd.className = "mono";
 
-    const tdMorningH = document.createElement("td"); tdMorningH.className = "mono";
-    const tdMorningY = document.createElement("td"); tdMorningY.className = "right mono";
+  const tdMorningH = document.createElement("td");
+  tdMorningH.setAttribute("data-label", "朝(h)");
+  tdMorningH.className = "mono";
 
-    const tdWeekendH = document.createElement("td"); tdWeekendH.className = "mono";
-    const tdWeekendY = document.createElement("td"); tdWeekendY.className = "right mono";
+  const tdMorningY = document.createElement("td");
+  tdMorningY.setAttribute("data-label", "朝(円)");
+  tdMorningY.className = "right mono";
 
-    const tdSpecialH = document.createElement("td"); tdSpecialH.className = "mono";
-    const tdSpecialY = document.createElement("td"); tdSpecialY.className = "right mono";
+  const tdWeekendH = document.createElement("td");
+  tdWeekendH.setAttribute("data-label", "休日(h)");
+  tdWeekendH.className = "mono";
 
-    const tdDel = document.createElement("td");
-    const btn = document.createElement("button");
-    btn.textContent = "削除";
-    btn.addEventListener("click", () => { tr.remove(); recalcAll(); });
-    tdDel.appendChild(btn);
+  const tdWeekendY = document.createElement("td");
+  tdWeekendY.setAttribute("data-label", "休日(円)");
+  tdWeekendY.className = "right mono";
 
-    [inDate, inStart, inDur].forEach(el => el.addEventListener("input", recalcAll));
+  const tdSpecialH = document.createElement("td");
+  tdSpecialH.setAttribute("data-label", "特別(h)");
+  tdSpecialH.className = "mono";
 
-    tr.append(
-      tdDate, tdStart, tdDur, tdEnd,
-      tdMorningH, tdMorningY,
-      tdWeekendH, tdWeekendY,
-      tdSpecialH, tdSpecialY,
-      tdDel
-    );
-    workTbody.appendChild(tr);
-  }
+  const tdSpecialY = document.createElement("td");
+  tdSpecialY.setAttribute("data-label", "特別(円)");
+  tdSpecialY.className = "right mono";
+
+  const tdDel = document.createElement("td");
+  tdDel.setAttribute("data-label", "操作");
+  const btn = document.createElement("button");
+  btn.textContent = "削除";
+  btn.addEventListener("click", () => { tr.remove(); recalcAll(); });
+  tdDel.appendChild(btn);
+
+  [inDate, inStart, inDur].forEach(el => el.addEventListener("input", recalcAll));
+
+  tr.append(
+    tdDate, tdStart, tdDur, tdEnd,
+    tdMorningH, tdMorningY,
+    tdWeekendH, tdWeekendY,
+    tdSpecialH, tdSpecialY,
+    tdDel
+  );
+  workTbody.appendChild(tr);
+}
 
   addWorkRow();
 
