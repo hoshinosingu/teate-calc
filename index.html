@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>手当計算（モーニング/休日/特別）</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 16px; line-height: 1.4; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    .grid { display: grid; gap: 12px; grid-template-columns: 1fr; max-width: 1200px; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; }
+    label { display:block; font-size: 12px; color:#444; margin-top: 6px; }
+    input { width: 100%; padding: 8px; border:1px solid #ccc; border-radius: 8px; font-size: 14px; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #eee; padding: 8px; font-size: 13px; text-align: left; vertical-align: top; }
+    th { background: #fafafa; position: sticky; top: 0; }
+    .row-controls { display:flex; gap: 8px; flex-wrap: wrap; }
+    button { padding: 8px 10px; border:1px solid #ccc; border-radius: 8px; background:#fff; cursor:pointer; }
+    button:hover { background:#f6f6f6; }
+    .muted { color:#666; font-size: 12px; }
+    .right { text-align:right; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .summary { display:grid; gap:10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .sumBox { border: 1px dashed #ccc; border-radius: 10px; padding: 10px; }
+    .sumBox b { font-size: 18px; }
+  </style>
+</head>
+<body>
+  <h1>バイト手当計算（モーニング / 休日(土日) / 特別日）</h1>
+
+  <div class="grid">
+    <div class="card">
+      <div style="display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <div>
+          <label>モーニング手当（円/時）</label>
+          <input id="morningRate" type="number" value="0" min="0" step="1" />
+          <div class="muted">例：+50円/時なら 50</div>
+        </div>
+        <div>
+          <label>休日手当（土日）（円/時）</label>
+          <input id="weekendRate" type="number" value="100" min="0" step="1" />
+        </div>
+        <div>
+          <label>モーニング時間帯</label>
+          <div style="display:flex; gap:8px;">
+            <input id="morningStart" class="mono" value="6:00" />
+            <input id="morningEnd" class="mono" value="9:00" />
+          </div>
+          <div class="muted">固定ならこのままでOK</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; gap:12px; flex-wrap: wrap; align-items: end;">
+        <div style="min-width:220px; flex:1;">
+          <label>特別日（正月・GW・盆など）</label>
+          <div class="muted">日付と「+○円/時」を追加するだけで後付け</div>
+        </div>
+        <div class="row-controls">
+          <button id="addSpecial">特別日を追加</button>
+          <button id="clearSpecial">特別日を全消し</button>
+        </div>
+      </div>
+
+      <table id="specialTable" style="margin-top:10px;">
+        <thead>
+          <tr>
+            <th style="width:170px;">日付</th>
+            <th style="width:170px;">加算（円/時）</th>
+            <th style="width:90px;"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="muted">例：2026-01-02 / 2026-01-03 / 2026-01-04 を +200 にする</div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; gap:12px; flex-wrap: wrap; align-items: end;">
+        <div style="min-width:220px; flex:1;">
+          <label>勤務入力</label>
+          <div class="muted">入力は「日付 / 出勤(例7:30) / 総労働(例6:14)」だけ</div>
+        </div>
+        <div class="row-controls">
+          <button id="addRow">行を追加</button>
+          <button id="clearRows">行を全消し</button>
+        </div>
+      </div>
+
+      <table id="workTable" style="margin-top:10px;">
+        <thead>
+          <tr>
+            <th style="width:140px;">日付</th>
+            <th style="width:110px;">出勤</th>
+            <th style="width:120px;">総労働</th>
+            <th style="width:120px;">退勤</th>
+
+            <th style="width:120px;">朝(h)</th>
+            <th class="right" style="width:140px;">朝(円)</th>
+
+            <th style="width:120px;">休日(h)</th>
+            <th class="right" style="width:140px;">休日(円)</th>
+
+            <th style="width:120px;">特別(h)</th>
+            <th class="right" style="width:140px;">特別(円)</th>
+
+            <th style="width:90px;"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="muted" style="margin-top:8px;">
+        ・切り捨ては <b>15分単位で必ず切り捨て</b>（分で処理）<br>
+        ・モーニングは <b>6:00〜9:00</b> と勤務の重なり分だけ<br>
+        ・休日は <b>土日だけ</b>（特別日と重なれば結果的に +300/時 になる）<br>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>集計結果</label>
+      <div class="summary">
+        <div class="sumBox">モーニング手当 合計（円）<br><b id="sumMorning">0</b></div>
+        <div class="sumBox">休日手当 合計（円）<br><b id="sumWeekend">0</b></div>
+        <div class="sumBox">特別手当 合計（円）<br><b id="sumSpecial">0</b></div>
+        <div class="sumBox">全部の合計（円）<br><b id="sumAll">0</b></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const pad2 = n => String(n).padStart(2,'0');
+
+  function normalizeTimeString(s) {
+    // "6：14" (全角コロン) や "6：１４" も受けたい
+    return String(s ?? "")
+      .trim()
+      .replace(/：/g, ":")
+      .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+  }
+
+  function parseHM(str) {
+    // "7:30" "07:30" "7" -> minutes
+    const s = normalizeTimeString(str);
+    if (!s) return null;
+    const m = s.match(/^(\d{1,2})(?::(\d{1,2}))?$/);
+    if (!m) return null;
+    const hh = Number(m[1]);
+    const mm = m[2] ? Number(m[2]) : 0;
+    if (hh < 0 || hh > 47) return null;
+    if (mm < 0 || mm > 59) return null;
+    return hh * 60 + mm;
+  }
+
+  function fmtHM(minutes) {
+    if (minutes == null) return "";
+    const hh = Math.floor(minutes / 60);
+    const mm = minutes % 60;
+    return `${hh}:${pad2(mm)}`;
+  }
+
+  // ★ここがポイント：分のまま15分単位で切り捨て
+  function floorMinutesTo15(mins) {
+    return Math.floor(mins / 15) * 15;
+  }
+  function minutesToQuarterHours(mins) {
+    return floorMinutesTo15(mins) / 60;
+  }
+
+  function isWeekend(dateStr) {
+    const d = new Date(dateStr + "T00:00:00");
+    if (Number.isNaN(d.getTime())) return false;
+    const day = d.getDay(); // 0 Sun ... 6 Sat
+    return day === 0 || day === 6;
+  }
+
+  const workTbody = document.querySelector("#workTable tbody");
+  const specialTbody = document.querySelector("#specialTable tbody");
+
+  const morningRateEl = document.querySelector("#morningRate");
+  const weekendRateEl = document.querySelector("#weekendRate");
+  const morningStartEl = document.querySelector("#morningStart");
+  const morningEndEl = document.querySelector("#morningEnd");
+
+  const sumMorningEl = document.querySelector("#sumMorning");
+  const sumWeekendEl = document.querySelector("#sumWeekend");
+  const sumSpecialEl = document.querySelector("#sumSpecial");
+  const sumAllEl = document.querySelector("#sumAll");
+
+  function addSpecialRow(dateVal="", rateVal="") {
+    const tr = document.createElement("tr");
+
+    const tdDate = document.createElement("td");
+    const inDate = document.createElement("input");
+    inDate.type = "date";
+    inDate.value = dateVal;
+    tdDate.appendChild(inDate);
+
+    const tdRate = document.createElement("td");
+    const inRate = document.createElement("input");
+    inRate.type = "number";
+    inRate.min = "0";
+    inRate.step = "1";
+    inRate.value = rateVal;
+    tdRate.appendChild(inRate);
+
+    const tdDel = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.textContent = "削除";
+    btn.addEventListener("click", () => { tr.remove(); recalcAll(); });
+    tdDel.appendChild(btn);
+
+    [inDate, inRate].forEach(el => el.addEventListener("input", recalcAll));
+    tr.append(tdDate, tdRate, tdDel);
+    specialTbody.appendChild(tr);
+  }
+
+  // 初期：正月例（不要なら消してOK）
+  addSpecialRow("2026-01-02", "200");
+  addSpecialRow("2026-01-03", "200");
+  addSpecialRow("2026-01-04", "200");
+
+  function readSpecials() {
+    const map = new Map();
+    for (const tr of specialTbody.querySelectorAll("tr")) {
+      const date = tr.querySelector('input[type="date"]').value;
+      const rate = Number(tr.querySelector('input[type="number"]').value || 0);
+      if (date) map.set(date, rate);
+    }
+    return map;
+  }
+
+  function addWorkRow(dateVal="", startVal="", durVal="") {
+    const tr = document.createElement("tr");
+
+    const tdDate = document.createElement("td");
+    const inDate = document.createElement("input");
+    inDate.type = "date";
+    inDate.value = dateVal;
+    tdDate.appendChild(inDate);
+
+    const tdStart = document.createElement("td");
+    const inStart = document.createElement("input");
+    inStart.placeholder = "7:30";
+    inStart.className = "mono";
+    inStart.value = startVal;
+    tdStart.appendChild(inStart);
+
+    const tdDur = document.createElement("td");
+    const inDur = document.createElement("input");
+    inDur.placeholder = "6:14";
+    inDur.className = "mono";
+    inDur.value = durVal;
+    tdDur.appendChild(inDur);
+
+    const tdEnd = document.createElement("td"); tdEnd.className = "mono";
+
+    const tdMorningH = document.createElement("td"); tdMorningH.className = "mono";
+    const tdMorningY = document.createElement("td"); tdMorningY.className = "right mono";
+
+    const tdWeekendH = document.createElement("td"); tdWeekendH.className = "mono";
+    const tdWeekendY = document.createElement("td"); tdWeekendY.className = "right mono";
+
+    const tdSpecialH = document.createElement("td"); tdSpecialH.className = "mono";
+    const tdSpecialY = document.createElement("td"); tdSpecialY.className = "right mono";
+
+    const tdDel = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.textContent = "削除";
+    btn.addEventListener("click", () => { tr.remove(); recalcAll(); });
+    tdDel.appendChild(btn);
+
+    [inDate, inStart, inDur].forEach(el => el.addEventListener("input", recalcAll));
+
+    tr.append(
+      tdDate, tdStart, tdDur, tdEnd,
+      tdMorningH, tdMorningY,
+      tdWeekendH, tdWeekendY,
+      tdSpecialH, tdSpecialY,
+      tdDel
+    );
+    workTbody.appendChild(tr);
+  }
+
+  addWorkRow();
+
+  function recalcAll() {
+    const morningRate = Number(morningRateEl.value || 0);
+    const weekendRate = Number(weekendRateEl.value || 0);
+
+    const morningStart = parseHM(morningStartEl.value) ?? (6*60);
+    const morningEnd = parseHM(morningEndEl.value) ?? (9*60);
+
+    const specials = readSpecials();
+
+    let sumMorning = 0;
+    let sumWeekend = 0;
+    let sumSpecial = 0;
+
+    for (const tr of workTbody.querySelectorAll("tr")) {
+      const tds = tr.querySelectorAll("td");
+      const dateStr = tds[0].querySelector('input[type="date"]').value;
+      const startMin = parseHM(tds[1].querySelector("input").value);
+      const durMinRaw = parseHM(tds[2].querySelector("input").value);
+
+      const tdEnd = tds[3];
+
+      const tdMorningH = tds[4];
+      const tdMorningY = tds[5];
+
+      const tdWeekendH = tds[6];
+      const tdWeekendY = tds[7];
+
+      const tdSpecialH = tds[8];
+      const tdSpecialY = tds[9];
+
+      tdEnd.textContent = "";
+      tdMorningH.textContent = ""; tdMorningY.textContent = "";
+      tdWeekendH.textContent = ""; tdWeekendY.textContent = "";
+      tdSpecialH.textContent = ""; tdSpecialY.textContent = "";
+
+      if (!dateStr || startMin == null || durMinRaw == null) continue;
+
+      // ★総労働時間は「分」で15分切り捨てしてから使う
+      const durMin = floorMinutesTo15(durMinRaw);
+
+      const endMin = startMin + durMinRaw; // 退勤表示は入力値そのまま（必要なら durMin にしてもOK）
+      tdEnd.textContent = fmtHM(endMin);
+
+      // 総労働(時間) 15分切り捨て済み
+      const totalHours = durMin / 60;
+
+      // モーニング重なり（分）→15分切り捨て
+      const overlapStart = Math.max(startMin, morningStart);
+      const overlapEnd = Math.min(startMin + durMinRaw, morningEnd);
+      const overlapMinRaw = Math.max(0, overlapEnd - overlapStart);
+      const morningHours = minutesToQuarterHours(overlapMinRaw);
+
+      const morningYen = morningHours * morningRate;
+
+      // 休日（土日）: 総労働時間を適用（切り捨て済み）
+      const weekendHours = isWeekend(dateStr) ? totalHours : 0;
+      const weekendYen = weekendHours * weekendRate;
+
+      // 特別日: 日付一致の +円/時 を総労働時間に適用（切り捨て済み）
+      const specialRate = specials.get(dateStr) ?? 0;
+      const specialHours = specialRate > 0 ? totalHours : 0;
+      const specialYen = specialHours * specialRate;
+
+      tdMorningH.textContent = morningHours.toFixed(2);
+      tdMorningY.textContent = Math.floor(morningYen).toString();
+
+      tdWeekendH.textContent = weekendHours.toFixed(2);
+      tdWeekendY.textContent = Math.floor(weekendYen).toString();
+
+      tdSpecialH.textContent = specialHours.toFixed(2);
+      tdSpecialY.textContent = Math.floor(specialYen).toString();
+
+      sumMorning += morningYen;
+      sumWeekend += weekendYen;
+      sumSpecial += specialYen;
+    }
+
+    const sumAll = sumMorning + sumWeekend + sumSpecial;
+
+    sumMorningEl.textContent = Math.floor(sumMorning).toString();
+    sumWeekendEl.textContent = Math.floor(sumWeekend).toString();
+    sumSpecialEl.textContent = Math.floor(sumSpecial).toString();
+    sumAllEl.textContent = Math.floor(sumAll).toString();
+  }
+
+  document.querySelector("#addRow").addEventListener("click", () => { addWorkRow(); recalcAll(); });
+  document.querySelector("#clearRows").addEventListener("click", () => { workTbody.innerHTML = ""; addWorkRow(); recalcAll(); });
+
+  document.querySelector("#addSpecial").addEventListener("click", () => { addSpecialRow("", ""); recalcAll(); });
+  document.querySelector("#clearSpecial").addEventListener("click", () => { specialTbody.innerHTML = ""; recalcAll(); });
+
+  [morningRateEl, weekendRateEl, morningStartEl, morningEndEl].forEach(el => el.addEventListener("input", recalcAll));
+
+  recalcAll();
+</script>
+</body>
+</html>
