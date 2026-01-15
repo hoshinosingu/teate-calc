@@ -81,7 +81,7 @@
     <div class="card">
       <div class="three">
         <div>
-          <label>何月分（締め：先月15日〜今月15日）</label>
+          <label>何月分（締め：先月16日〜今月15日）</label>
           <input id="targetMonth" type="month" />
         </div>
         <div>
@@ -113,13 +113,11 @@
       <div class="two" style="margin-top:10px;">
         <div>
           <label>モーニング時間帯（開始）</label>
-          <input id="morningStart" class="mono" value="600" />
-          <div class="muted">例：600 / 6:00 / 0600</div>
+          <input id="morningStart" class="mono" value="6:00" />
         </div>
         <div>
           <label>モーニング時間帯（終了）</label>
-          <input id="morningEnd" class="mono" value="900" />
-          <div class="muted">例：900 / 9:00 / 0900</div>
+          <input id="morningEnd" class="mono" value="9:00" />
         </div>
       </div>
     </div>
@@ -180,7 +178,7 @@
       <div class="row-controls" style="justify-content: space-between;">
         <div>
           <label style="margin:0;">勤務</label>
-          <div class="muted">出勤/総労働は「730」「615」でもOK（自動で「7:30」「6:15」に整形）</div>
+          <div class="muted">出勤/総労働は「730」「615」でもOK（自動で7:30等に整形）</div>
         </div>
         <div class="row-controls">
           <button id="addRow">行を追加</button>
@@ -261,10 +259,11 @@
     return `${y}/${m}/${d}`;
   }
 
+  // 締め：先月16日〜今月15日
   function periodFromTargetMonth(yyyyMm) {
     const [y, m] = yyyyMm.split("-").map(Number);
     const end = new Date(y, m - 1, 15);
-    const start = new Date(y, m - 2, 15);
+    const start = new Date(y, m - 2, 16);
     return { start, end };
   }
 
@@ -277,6 +276,9 @@
     periodTextEl.value = `${s} 〜 ${e}`;
     pageTitleEl.textContent = `${Number(yyyyMm.slice(0,4))}年${Number(yyyyMm.slice(5,7))}月分 手当計算`;
     pageSubtitleEl.textContent = `対象期間：${formatJP(s)} 〜 ${formatJP(e)}`;
+    // モーニング入力も常に "H:MM" 表記に整える
+    formatInputToHM(morningStartEl);
+    formatInputToHM(morningEndEl);
     recalcAll();
   }
 
@@ -300,7 +302,6 @@
     const s0 = normalizeDigits(str);
     if (!s0) return null;
 
-    // すでに "H:MM" 形式
     const m1 = s0.match(/^(\d{1,2}):(\d{1,2})$/);
     if (m1) {
       const hh = Number(m1[1]);
@@ -309,18 +310,15 @@
       return hh * 60 + mm;
     }
 
-    // 数字だけ
     const digits = s0.replace(/\D/g, "");
     if (!digits) return null;
 
     if (digits.length <= 2) {
-      // "7" -> 7:00 / "45" -> 0:45
       const n = Number(digits);
-      if (digits.length === 1) return n * 60;
-      if (digits.length === 2) return n; // 0:MM
+      if (digits.length === 1) return n * 60;  // "7" -> 7:00
+      if (digits.length === 2) return n;       // "45" -> 0:45
     }
 
-    // 3桁: 730 -> 7:30
     if (digits.length === 3) {
       const hh = Number(digits.slice(0,1));
       const mm = Number(digits.slice(1,3));
@@ -328,7 +326,6 @@
       return hh * 60 + mm;
     }
 
-    // 4桁以上: 0730 / 1230 -> 12:30（先頭4桁を採用）
     const d4 = digits.slice(0,4);
     const hh = Number(d4.slice(0,2));
     const mm = Number(d4.slice(2,4));
@@ -342,7 +339,6 @@
     return `${hh}:${pad2(mm)}`;
   }
 
-  // 入力欄を "H:MM" に整形（解釈できる時だけ）
   function formatInputToHM(inputEl) {
     const mins = parseTimeFlexible(inputEl.value);
     if (mins == null) return;
@@ -467,12 +463,8 @@
     return set;
   }
 
-  function clearHolidayRows() {
-    holidayTbody.innerHTML = "";
-  }
-
   function fillHolidayListForPeriod() {
-    clearHolidayRows();
+    holidayTbody.innerHTML = "";
     if (!PERIOD) return;
 
     const map = new Map();
@@ -541,7 +533,7 @@
     const tdStart = document.createElement("td");
     tdStart.setAttribute("data-label", "出勤");
     const inStart = document.createElement("input");
-    inStart.placeholder = "730";
+    inStart.placeholder = "7:30";
     inStart.className = "mono";
     inStart.value = startVal;
     tdStart.appendChild(inStart);
@@ -549,7 +541,7 @@
     const tdDur = document.createElement("td");
     tdDur.setAttribute("data-label", "総労働");
     const inDur = document.createElement("input");
-    inDur.placeholder = "630";
+    inDur.placeholder = "6:15";
     inDur.className = "mono";
     inDur.value = durVal;
     tdDur.appendChild(inDur);
@@ -589,13 +581,8 @@
     btn.addEventListener("click", () => { tr.remove(); recalcAll(); });
     tdDel.appendChild(btn);
 
-    // blurで自動整形（入力中に邪魔しない）
     inStart.addEventListener("blur", () => { formatInputToHM(inStart); recalcAll(); });
     inDur.addEventListener("blur", () => { formatInputToHM(inDur); recalcAll(); });
-
-    // これらも同様に整形
-    morningStartEl.addEventListener("blur", () => { formatInputToHM(morningStartEl); recalcAll(); });
-    morningEndEl.addEventListener("blur", () => { formatInputToHM(morningEndEl); recalcAll(); });
 
     [inDate, inStart, inDur].forEach(el => el.addEventListener("input", recalcAll));
 
@@ -613,10 +600,8 @@
     const morningRate = Number(morningRateEl.value || 0);
     const holidayRate = Number(holidayRateEl.value || 0);
 
-    const mStart = parseTimeFlexible(morningStartEl.value);
-    const mEnd = parseTimeFlexible(morningEndEl.value);
-    const morningStart = (mStart == null ? 6*60 : mStart);
-    const morningEnd = (mEnd == null ? 9*60 : mEnd);
+    const morningStart = parseTimeFlexible(morningStartEl.value) ?? (6*60);
+    const morningEnd = parseTimeFlexible(morningEndEl.value) ?? (9*60);
 
     const specials = readSpecials();
     const manualHoliday = readManualHolidaySet();
@@ -632,9 +617,7 @@
       return hs ? hs.has(dateStr) : false;
     };
 
-    let sumMorning = 0;
-    let sumHoliday = 0;
-    let sumSpecial = 0;
+    let sumMorning = 0, sumHoliday = 0, sumSpecial = 0;
 
     for (const tr of workTbody.querySelectorAll("tr")) {
       const tds = tr.querySelectorAll("td");
@@ -667,6 +650,7 @@
       const overlapStart = Math.max(startMin, morningStart);
       const overlapEnd = Math.min(startMin + durMinRaw, morningEnd);
       const overlapMinRaw = Math.max(0, overlapEnd - overlapStart);
+
       const morningHours = minutesToHoursRounded(overlapMinRaw);
       const morningYen = morningHours * morningRate;
 
@@ -683,13 +667,13 @@
       const specialYen = specialHours * specialRate;
 
       tdMorningH.textContent = morningHours.toFixed(2);
-      tdMorningY.textContent = Math.floor(morningYen).toString();
+      tdMorningY.textContent = String(Math.floor(morningYen));
 
       tdHolidayH.textContent = holidayHours.toFixed(2);
-      tdHolidayY.textContent = Math.floor(holidayYen).toString();
+      tdHolidayY.textContent = String(Math.floor(holidayYen));
 
       tdSpecialH.textContent = specialHours.toFixed(2);
-      tdSpecialY.textContent = Math.floor(specialYen).toString();
+      tdSpecialY.textContent = String(Math.floor(specialYen));
 
       sumMorning += morningYen;
       sumHoliday += holidayYen;
@@ -708,16 +692,13 @@
     targetMonthEl.value = `${now.getFullYear()}-${pad2(now.getMonth()+1)}`;
     setTargetMonth(targetMonthEl.value);
 
-    // 入力欄（モーニング時間帯）も blur 整形
-    morningStartEl.addEventListener("blur", () => formatInputToHM(morningStartEl));
-    morningEndEl.addEventListener("blur", () => formatInputToHM(morningEndEl));
+    morningStartEl.addEventListener("blur", () => { formatInputToHM(morningStartEl); recalcAll(); });
+    morningEndEl.addEventListener("blur", () => { formatInputToHM(morningEndEl); recalcAll(); });
 
     addWorkRow();
   })();
 
-  // Buttons
   document.querySelector("#applyMonth").addEventListener("click", () => setTargetMonth(targetMonthEl.value));
-
   document.querySelector("#addRow").addEventListener("click", () => { addWorkRow(); recalcAll(); });
   document.querySelector("#clearRows").addEventListener("click", () => { workTbody.innerHTML = ""; addWorkRow(); recalcAll(); });
 
@@ -728,7 +709,6 @@
   document.querySelector("#clearHoliday").addEventListener("click", () => { holidayTbody.innerHTML = ""; recalcAll(); });
   document.querySelector("#fillHoliday").addEventListener("click", () => fillHolidayListForPeriod());
 
-  // Inputs
   [morningRateEl, holidayRateEl, roundingGraceEl, useAutoHolidayEl, targetMonthEl]
     .forEach(el => el.addEventListener("input", recalcAll));
 </script>
