@@ -124,10 +124,7 @@
         </div>
       </div>
 
-      <div class="muted" style="margin-top:6px;">
-        ※モーニング計算のみ：出勤時刻を±5分補正（〜終了時刻まで）／総労働は変更しない
-      </div>
-    </div>
+
 
     <div class="card">
       <div class="row-controls" style="justify-content: space-between;">
@@ -189,7 +186,7 @@
       <div class="row-controls" style="justify-content: space-between;">
         <div>
           <label style="margin:0;">勤務</label>
-          <div class="muted">出勤/総労働は「730」「614」でもOK（フォーカス外れたら7:30等に整形）</div>
+          <div class="muted">出勤/総労働は「730」「615」でもOK（自動で7:30等に整形）</div>
         </div>
         <div class="row-controls">
           <button id="addRow">行を追加</button>
@@ -229,10 +226,6 @@
         <div class="sumBox">特別合計（円）<br><b id="sumSpecial">0</b></div>
         <div class="sumBox">全部合計（円）<br><b id="sumAll">0</b></div>
       </div>
-      <div class="muted" style="margin-top:6px;">
-        ※金額の端数は四捨五入（例：62.5→63）
-      </div>
-    </div>
 
   </div>
 
@@ -594,7 +587,7 @@
     const tdDur = document.createElement("td");
     tdDur.setAttribute("data-label", "総労働");
     const inDur = document.createElement("input");
-    inDur.placeholder = "614";
+    inDur.placeholder = "615";
     inDur.className = "mono";
     inDur.value = durVal;
     tdDur.appendChild(inDur);
