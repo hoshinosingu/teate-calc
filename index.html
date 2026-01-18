@@ -463,14 +463,13 @@
     return set;
   }
 
-  function hookDateInputSmartOpen(inDate) {
-  // dateピッカーは環境差が大きいので「自動で値を消す」処理はしない
+function hookDateInputSmartOpen(inDate) {
   const on = () => {
     if (inDate.value) lastPickedDate = inDate.value;
     recalcAll();
   };
-  inDate.addEventListener("input", on);
   inDate.addEventListener("change", on);
+  inDate.addEventListener("input", on);
 }
 
   function addHolidayRow(dateVal="") {
