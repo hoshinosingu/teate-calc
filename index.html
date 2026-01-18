@@ -464,24 +464,14 @@
   }
 
   function hookDateInputSmartOpen(inDate) {
-    inDate.addEventListener("focus", () => {
-      if (!inDate.value && lastPickedDate) {
-        inDate.dataset.tempFilled = "1";
-        inDate.value = lastPickedDate;
-      }
-    });
-
-    inDate.addEventListener("input", () => {
-      if (inDate.value) lastPickedDate = inDate.value;
-    });
-
-    inDate.addEventListener("blur", () => {
-      if (inDate.dataset.tempFilled === "1") {
-        if (inDate.value === lastPickedDate) inDate.value = "";
-        delete inDate.dataset.tempFilled;
-      }
-    });
-  }
+  // dateピッカーは環境差が大きいので「自動で値を消す」処理はしない
+  const on = () => {
+    if (inDate.value) lastPickedDate = inDate.value;
+    recalcAll();
+  };
+  inDate.addEventListener("input", on);
+  inDate.addEventListener("change", on);
+}
 
   function addHolidayRow(dateVal="") {
     const tr = document.createElement("tr");
