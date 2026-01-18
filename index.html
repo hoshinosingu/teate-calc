@@ -219,6 +219,10 @@
         </thead>
         <tbody></tbody>
       </table>
+<div class="row-controls" style="justify-content:flex-end; margin-top:10px;">
+  <button id="addRowBottom">行を追加</button>
+</div>
+
     </div>
 
     <div class="card">
@@ -871,13 +875,10 @@ function hookDateInputSmartOpen(inDate) {
     scheduleSave();
   });
 
-  document.querySelector("#addRow").addEventListener("click", () => { addWorkRow(); recalcAll(); });
-  document.querySelector("#clearRows").addEventListener("click", () => {
-    if (!confirm("勤務行を全て消しますか？")) return;
-    workTbody.innerHTML = "";
-    addWorkRow();
-    recalcAll();
-  });
+  document.querySelector("#addRowBottom").addEventListener("click", () => {
+  addWorkRow();
+  recalcAll();
+});
 
   document.querySelector("#addSpecial").addEventListener("click", () => { addSpecialRow("", ""); recalcAll(); });
   document.querySelector("#clearSpecial").addEventListener("click", () => {
@@ -896,6 +897,24 @@ function hookDateInputSmartOpen(inDate) {
     if (!confirm("対象期間の祝日を自動入力しますか？（手動リストは上書きされます）")) return;
     fillHolidayListForPeriod();
     scheduleSave();
+  });
+
+    document.querySelector("#fillHoliday").addEventListener("click", () => {
+    if (!confirm("対象期間の祝日を自動入力しますか？（手動リストは上書きされます）")) return;
+    fillHolidayListForPeriod();
+    scheduleSave();
+  });
+
+  document.querySelector("#addRow").addEventListener("click", () => {
+    addWorkRow();
+    recalcAll();
+  });
+
+  document.querySelector("#clearRows").addEventListener("click", () => {
+    if (!confirm("勤務の行を全て消しますか？")) return;
+    workTbody.innerHTML = "";
+    addWorkRow();
+    recalcAll();
   });
 
   [morningRateEl, holidayRateEl, roundingGraceEl, useAutoHolidayEl, targetMonthEl]
